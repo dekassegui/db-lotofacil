@@ -76,15 +76,24 @@ CREATE TRIGGER IF NOT EXISTS on_concursos_insert AFTER INSERT ON concursos BEGIN
   INSERT INTO bolas_sorteadas (concurso, bola) VALUES (new.concurso, new.bola13);
   INSERT INTO bolas_sorteadas (concurso, bola) VALUES (new.concurso, new.bola14);
   INSERT INTO bolas_sorteadas (concurso, bola) VALUES (new.concurso, new.bola15);
-
-  -- INSERT INTO sugestoes SELECT new.concurso, dezena FROM info_dezenas WHERE frequencia < new.concurso/10.0 AND latencia >= 10;
 END;
 
 CREATE TRIGGER IF NOT EXISTS on_concursos_delete AFTER DELETE ON concursos BEGIN
   DELETE FROM bolas_juntadas WHERE (concurso == old.concurso);
   DELETE FROM bolas_sorteadas WHERE (concurso == old.concurso);
-  -- DELETE FROM sugestoes WHERE (concurso == old.concurso);
-  -- DELETE FROM ganhadores WHERE (concurso == old.concurso);
+  DELETE FROM ganhadores WHERE (concurso == old.concurso);
+END;
+
+CREATE TRIGGER IF NOT EXISTS on_concursos_chk_cidade AFTER INSERT ON concursos
+WHEN new.cidade == "NULL" OR trim(new.cidade) == ""
+BEGIN
+  UPDATE concursos SET cidade=NULL WHERE concurso == new.concurso;
+END;
+
+CREATE TRIGGER IF NOT EXISTS on_concursos_chk_uf AFTER INSERT ON concursos
+WHEN new.uf == "NULL" OR trim(new.uf) == ""
+BEGIN
+  UPDATE concursos SET uf=NULL WHERE concurso == new.concurso;
 END;
 
 DROP TABLE IF EXISTS bolas_juntadas;
@@ -95,17 +104,6 @@ CREATE TABLE bolas_juntadas (
   bolas     INTEGER,
   FOREIGN KEY (concurso) REFERENCES concursos(concurso)
 );
-
-DROP VIEW IF EXISTS bitmasks;
-CREATE VIEW bitmasks AS
-  -- listagem das "bitmasks" das bolas sorteados em cada concurso
-  SELECT concurso, (
-    WITH RECURSIVE bits (n, r) AS (
-      VALUES (-1, "")
-      UNION ALL
-      SELECT n+1, (bolas >> n+1 & 1) || r FROM bits WHERE n < 25
-    ) SELECT r FROM bits WHERE n == 24
-  ) AS mask FROM bolas_juntadas;
 
 DROP TABLE IF EXISTS bolas_sorteadas;
 CREATE TABLE bolas_sorteadas (
@@ -119,17 +117,6 @@ CREATE TABLE bolas_sorteadas (
 DROP INDEX IF EXISTS ndx;
 CREATE INDEX ndx ON bolas_sorteadas (concurso, bola);
 
-CREATE VIEW IF NOT EXISTS info_bolas AS
-  -- frequências das bolas desde o primeiro concurso
-  -- número de concursos recentes em que as bolas não foram sorteadas
-  SELECT bola, count(bola) AS frequencia, (M - max(concurso)) AS latencia
-  FROM (
-    SELECT concurso AS M FROM concursos ORDER BY concurso DESC LIMIT 1
-  ), bolas_sorteadas
-  GROUP BY bola;
-
-COMMIT;
-
 DROP TABLE IF EXISTS ganhadores;
 CREATE TABLE ganhadores (
   concurso  INTEGER NOT NULL,
@@ -137,3 +124,30 @@ CREATE TABLE ganhadores (
   uf        TEXT,
   FOREIGN KEY (concurso) REFERENCES concursos(concurso)
 );
+
+CREATE TRIGGER IF NOT EXISTS on_ganhadores_insert BEFORE INSERT ON ganhadores
+WHEN new.cidade == "NULL" OR trim(new.cidade) == ""
+BEGIN
+  INSERT INTO ganhadores VALUES(new.concurso, NULL, new.uf);
+  SELECT RAISE(IGNORE);   --> cancela inserção do registro original
+END;
+
+CREATE VIEW IF NOT EXISTS bitmasks AS
+  -- listagem das "bitmasks" das bolas sorteados em cada concurso
+  SELECT concurso, (
+    WITH RECURSIVE bits (n, r) AS (
+      VALUES (-1, "")
+      UNION ALL
+      SELECT n+1, (bolas >> n+1 & 1) || r FROM bits WHERE n < 25
+    ) SELECT r FROM bits WHERE n == 24
+  ) AS mask FROM bolas_juntadas;
+
+CREATE VIEW IF NOT EXISTS info_bolas AS
+  SELECT M AS concurso, bola, frequencia, latencia, (frequencia < u AND latencia >= v) AS atipico
+  FROM (
+    SELECT bola, count(bola) AS frequencia, (M-max(concurso)) AS latencia, M, (M*15.0/25) AS u, (25.0/15) AS v
+    FROM (SELECT max(concurso) AS M FROM concursos), bolas_sorteadas
+    GROUP BY bola
+  );
+
+COMMIT;
