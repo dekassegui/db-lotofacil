@@ -150,4 +150,16 @@ CREATE VIEW IF NOT EXISTS info_bolas AS
     GROUP BY bola
   );
 
+CREATE VIEW IF NOT EXISTS espera AS
+  -- sequência de tempos de espera por concurso com 1+ acertadores das 15 bolas
+  WITH cte(s) AS (
+    SELECT group_concat(ganhadores_15_numeros>0, '') FROM concursos
+  ), ones(n, p) AS (
+    SELECT 1, instr(s, '1') FROM cte
+    UNION ALL
+    SELECT n+1, p+instr(substr(s, p+1), '1') AS m FROM cte, ones WHERE m > p
+  ) SELECT n AS ndx, p AS fim, p AS len FROM ones WHERE n == 1
+    UNION ALL
+    SELECT t.n, t.p, t.p-x.p FROM ones AS t JOIN ones AS x ON t.n == x.n+1;
+
 COMMIT;

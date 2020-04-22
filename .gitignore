@@ -1,0 +1,8 @@
+*~
+*.old
+*.zip
+*.sqlite
+*.xml
+*.log
+*.marks
+img/

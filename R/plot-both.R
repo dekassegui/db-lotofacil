@@ -19,7 +19,7 @@ CONCURSO <- numeros[1, c('concurso')]
 # parâmetros compartilhados pelos diagramas
 
 BAR_LABELS <- c(sprintf("%02d", 1:25))  # labels das colunas (ou barras)
-BAR_LABELS_CEX=1.28
+BAR_LABELS_CEX=1.375
 BAR_LABELS_FONT=2
 BAR_LABELS_COL="darkred"
 
@@ -47,13 +47,13 @@ BOX_COL=c("mistyrose")  # cores de preenchimento dos "box & whiskers"
 # dispositivo de renderização: arquivo PNG container da imagem resultante
 png(
   filename=sprintf('img/both-%d.png', CONCURSO),
-  width=800, height=600, pointsize=9, family="Quicksand"
+  width=800, height=600, pointsize=9, family="Roboto Condensed"
 )
 
 par(
   las=1, font=2,
-  cex.axis=1.25, font.axis=2, col.axis="goldenrod4",  # labels do eixo Y
-  cex.lab=1.5, font.lab=2, col.lab="dimgray"          # títulos laterais
+  cex.axis=1.4, font.axis=2, col.axis="goldenrod4", # labels do eixo Y
+  cex.lab=1.625, font.lab=2, col.lab="dimgray"      # títulos laterais
 )
 
 minor=(min(numeros$frequencia)%/%10-1)*10 # limite inferior do eixo Y
@@ -108,13 +108,16 @@ rect(
 )
 
 # renderiza o número do concurso mais recente na margem direita
-text(X2, minor, CONCURSO, srt=90, adj=c(0, 0), cex=3.25, font=1, col="dimgray")
+text(
+  X2, minor, paste("Lotofácil", CONCURSO),
+  srt=90, adj=c(0, 0), cex=2.5, font=2, col=par("col.lab")
+)
 
 # -- DIAGRAMA DAS LATÊNCIAS
 
 par(mar=c(2.5, 5.5, 0, 1))
 
-major=max(numeros$latencia)   # limite superior do eixo Y
+major=max(3, max(numeros$latencia)) # limite superior do eixo Y
 
 bar <- barplot(
   numeros$latencia,
@@ -127,8 +130,11 @@ bar <- barplot(
 
 title(ylab="Latências", line=3.5)
 
-yLab=seq.int(from=0, to=major, by=ifelse(major>9, 2, 1))
+yLab=seq.int(from=0, to=major, by=ifelse(major>4, 2, 1))
 axis(side=2, at=yLab, col=RULE_COL)
+if (major>4) {
+  rug(side=2, seq.int(1, max(yLab), 2), ticksize=-.05, lwd=.85, col=RULE_COL)
+}
 
 # renderiza texto e linha do valor esperado das latências
 espera=5/3
