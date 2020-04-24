@@ -1,6 +1,7 @@
 #!/usr/bin/Rscript --slave --no-restore
 
-library(RSQLite)
+library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
+
 con <- dbConnect(SQLite(), dbname='loto.sqlite')
 
 rs <- dbSendQuery(con, 'SELECT COUNT(*) AS NRECS FROM concursos')

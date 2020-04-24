@@ -3,8 +3,9 @@
 # Script gerador da imagem do diagrama das frequências e do diagrama das
 # latências dos números sorteados até o concurso mais recente disponível,
 # visualmente homogêneos e alinhados verticalmente.
-#
-library(RSQLite, quietly=TRUE)
+
+library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
+
 con <- dbConnect(SQLite(), dbname='loto.sqlite')
 
 # requisita o número serial do concurso mais recente, frequências dos números,
@@ -52,8 +53,8 @@ png(
 
 par(
   las=1, font=2,
-  cex.axis=1.4, font.axis=2, col.axis="goldenrod4", # labels do eixo Y
-  cex.lab=1.625, font.lab=2, col.lab="dimgray"      # títulos laterais
+  cex.axis=1.4, font.axis=2, col.axis="#663300",  # labels do eixo Y
+  cex.lab=1.625, font.lab=2, col.lab="dimgray"    # títulos laterais
 )
 
 minor=(min(numeros$frequencia)%/%10-1)*10 # limite inferior do eixo Y
@@ -124,8 +125,7 @@ bar <- barplot(
   names.arg=BAR_LABELS, cex.names=BAR_LABELS_CEX,
   font.axis=BAR_LABELS_FONT, col.axis=BAR_LABELS_COL,
   border=BAR_BORDER, col=BAR_COLORS, space=SPACE,
-  ylim=c(0, major+.1),
-  yaxt='n'
+  ylim=c(0, major+.2), yaxt='n'
 )
 
 title(ylab="Latências", line=3.5)

@@ -1,11 +1,15 @@
-library(RSQLite)
+#!/usr/bin/Rscript --no-init-file
+
+library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
+library(vcd)      # r-cran-vcd    <-- GNU R Visualizing Categorical Data
+
 con <- dbConnect(SQLite(), 'loto.sqlite')
 
-# alocação da lista das sequências dos tempos de espera para cada número
+# alocação da lista das sequências dos tempos de espera para cada NUMERO
 latencias <- vector("list", 25)
 
-# Query paramétrica para computar a sequência dos tempos de espera por NUMERO na
-# série histórica de concursos, onde:
+# Query paramétrica para computar a sequência dos tempos de espera por concurso
+# em que NUMERO foi sorteado, na série histórica de concursos, onde:
 #
 #   ndx --> número de ordem na sequência
 #   fim --> número serial do concurso em que NUMERO foi sorteado
@@ -45,20 +49,24 @@ dat$medias <- sapply(latencias, function(it){ mean(it$len) })
 
 dat$desvio <- sapply(latencias, function(it){ sd(it$len) })
 
-# teste de aderência do tempo de espera por NUMERO ~ Geométrica(p) tal que a
-# probabilidade de sucesso "p" é estimada via método de máxima verossimilhança
-# aplicado às observações
+# executa o teste de aderência do tempo de espera por NUMERO ~ Geométrica(p)
+# tal que a probabilidade de sucesso "p" é 15/25 = .6
 teste <- function(NUMERO) {
   NUMERO=ifelse(NUMERO<1, 1, ifelse(NUMERO>25, 25, NUMERO))
-  gof <- vcd::goodfit(
+  gof <- goodfit(
     table(latencias[[NUMERO]]$len-1), # contagem do número de falhas até sucesso
     type="nbinomial",                 # adequada para binomial negativa, tal que
     par=list(                         # Binomial_negativa(1, p) == Geometrica(p)
-      size=1,                         # número de sucessos característico
-      prob=dat$prob[NUMERO]           # estimativa a priori
+      size=1,
+      prob=.6
     )
   )
   cat(sprintf('\nHØ: Tempo de espera da bola %d ~ Geom(%7.5f)', NUMERO, gof$par$prob), '\n')
   summary(gof)
   # plot(gof)
 }
+
+# extrai p-value dos testes de aderência em cada número
+options(warn=-1)
+dat$pvalue=-1
+for (n in 1:25) { dat[n,]$pvalue=teste(n)[5] }

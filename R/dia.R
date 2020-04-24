@@ -3,8 +3,9 @@
 # Diagrama de frequências e latências dos números sorteados na Lotofácil até o
 # concurso mais recente - cujos dados estejam armazenados localmente - exibindo
 # sumário de estatísticas de cada número, dos sorteios e do concurso.
-#
-library(RSQLite)
+
+library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
+
 con <- dbConnect(SQLite(), "loto.sqlite")
 
 # requisita o número do concurso mais recente, número de concursos acumulados
@@ -14,8 +15,8 @@ loto <- dbGetQuery(con, "WITH cte(m, n) AS (
 ) SELECT m AS concurso, m-MAX(concurso) AS acumulados, CAST(n as REAL)/m AS premiacao
   FROM cte, concursos WHERE ganhadores_15_numeros>0")
 
-# requisita frequências e latências dos números no concurso mais recente
-numeros <- dbGetQuery(con, "SELECT frequencia, latencia FROM info_bolas ORDER BY bola")
+# requisita frequências, latências e atipicidades dos números no concurso mais recente
+numeros <- dbGetQuery(con, "SELECT frequencia, latencia, atipico FROM info_bolas ORDER BY bola")
 
 latencias <- vector("list", 25)
 
@@ -102,7 +103,7 @@ dat <- matrix(c("\uF00C", "\uF00D", "dodgerblue", "red"), ncol=2, byrow=T)
 mtext(
   c("números i.i.d. U\u276A1, 25\u276B", dat[1,x],
     "latências i.i.d. Geom\u276A0.6\u276B", dat[1,y]),
-  side=1, at=c(1.67, 1.71), line=c(1, 1.2, 2.4, 2.6), adj=c(1, 0),
+  side=1, at=c(1.67, 1.71), line=c(1, 1.2, 2.45, 2.65), adj=c(1, 0),
   cex=c(1.26, 1.75), col=c("gray20", dat[2,x], "gray20", dat[2,y]),
   family="Roboto"
 )
@@ -113,7 +114,7 @@ rm(dat)
 rect(2.82, -0.06, 4.88, -0.46, xpd=T, col="#FFFFA0", border=NA) # background
 mtext(
   c("frequência", "Atípico\u2215Reincidente", "latência", "latência recorde"),
-  side=1, at=c(2.88, 4.82), line=c(1, 1, 2.4, 2.4), adj=c(0, 1), cex=1.26,
+  side=1, at=c(2.88, 4.82), line=c(1, 1, 2.45, 2.45), adj=c(0, 1), cex=1.26,
   col=c("darkred", "black", "violetred", "firebrick"), family="Roboto"
 )
 
@@ -137,8 +138,9 @@ for (n in 1:25) {
   )
   # frequência histórica
   text(x+.1, 4.9-y, frequencia, adj=c(0, 1), cex=1.5, col="darkred")
-  # checa se frequência abaixo do esperado e latência acima do esperado
-  if (5/3*frequencia < loto$concurso & latencia >= 5/3) {
+  # checa se frequência abaixo do esperado (frequencia < loto$concurso*15/25)
+  # e latência acima do esperado (latencia >= 25/15)
+  if (atipico) {
     text(x+.9, 4.9-y, "A", adj=c(1, 1), cex=1.25, col="black")
   } else if (latencia == 0) {
     # renderiza borda extra para evidenciar número recém sorteado
