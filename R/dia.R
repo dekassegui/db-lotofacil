@@ -5,6 +5,7 @@
 # sumário de estatísticas de cada número, dos sorteios e do concurso.
 
 library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
+library(vcd)      # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 
 con <- dbConnect(SQLite(), "loto.sqlite")
 
@@ -18,7 +19,7 @@ loto <- dbGetQuery(con, "WITH cte(m, n) AS (
 # requisita frequências, latências e atipicidades dos números no concurso mais recente
 numeros <- dbGetQuery(con, "SELECT frequencia, latencia, atipico FROM info_bolas ORDER BY bola")
 
-latencias <- vector("list", 25)
+numeros$maxLatencia <- rep.int(0, 25) # alocação do vector das máximas latências
 
 # query paramétrica para requisitar a sequência dos tempos de espera por
 # NUMERO na série histórica dos concursos
@@ -36,12 +37,15 @@ rs <- dbSendQuery(con, "with cte(s) as (
 for (n in 1:25) {
   dbBind(rs, list("NUMERO"=n))
   dat <- dbFetch(rs)
-  latencias[[n]] <- dat$espera-1  # cálculo da latência
+  numeros$maxLatencia[n] <- max(dat$espera)-1  # máxima latência do NUMERO
 }
 dbClearResult(rs)
 
 # requisita os números sorteados no concurso anterior ao mais recente
 anterior <- dbGetQuery(con, paste("SELECT bola FROM bolas_sorteadas WHERE concurso+1 ==", loto$concurso))
+
+# requisita tempos de espera por concursos com premiação
+esperas <- dbGetQuery(con, 'SELECT len FROM espera')
 
 dbDisconnect(con)
 rm(con, dat, rs)
@@ -50,12 +54,20 @@ rm(con, dat, rs)
 teste <- chisq.test(numeros$frequencia, correct=F)
 x <- ifelse(teste$p.value >= .05, 1, 2)
 
-# testa HØ: latências de qualquer número têm a mesma distribuição
-teste <- kruskal.test(latencias)
-y <- ifelse(teste$p.value >= .05, 1, 2)
+# testa HØ: tempos de espera por concurso com premiação ~ Geométrica(p)
+teste <- goodfit(
+  table(esperas-1),   # tabela de contingência das latências, adequada
+  type="nbinomial",   # para Binomial_negativa(1, p) == Geometrica(p)
+  par=list(
+    size=1,
+    prob=loto$premiacao
+  )
+)
+texto <- capture.output(summary(teste))
+pvalue <- as.numeric(sub("^.+ (\\S+)$", "\\1", texto[grep("Pearson", texto)]))
+y <- ifelse(pvalue >= .05, 1, 2)
 
-numeros$maxLatencia <- sapply(latencias, max)
-rm(latencias, teste)
+rm(esperas, teste, texto, pvalue)
 
 numeros$corFundo <- "white"
 
@@ -102,8 +114,8 @@ mtext(
 dat <- matrix(c("\uF00C", "\uF00D", "dodgerblue", "red"), ncol=2, byrow=T)
 mtext(
   c("números i.i.d. U\u276A1, 25\u276B", dat[1,x],
-    "latências i.i.d. Geom\u276A0.6\u276B", dat[1,y]),
-  side=1, at=c(1.67, 1.71), line=c(1, 1.2, 2.45, 2.65), adj=c(1, 0),
+    paste0("premiações ~ Geom\u276A", signif(loto$premiacao, 2), "\u276B"), dat[1,y]),
+  side=1, at=c(1.72, 1.76), line=c(1, 1.2, 2.45, 2.65), adj=c(1, 0),
   cex=c(1.26, 1.75), col=c("gray20", dat[2,x], "gray20", dat[2,y]),
   family="Roboto"
 )
