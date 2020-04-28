@@ -46,18 +46,29 @@ dat$last <- sapply(esperas, function(it){ tail(it$fim, 1) })
 # percentual relativo de vezes que cada "bola" foi sorteada
 dat$prop <- dat$sizes / dat$last
 
-# maior tempo de espera de cada "bola" -- tamanho da subsequência mais longa
-dat$maximas <- sapply(esperas, function(it){ max(it$len) })
-
-# tempo de espera médio de cada "bola"
-dat$medias <- sapply(esperas, function(it){ mean(it$len) })
-
-# desvio padrão de cada "bola"
-dat$desvio <- sapply(esperas, function(it){ sd(it$len) })
-
 # probabilidade de sortear "bola" com número arbitrário num concurso onde são
 # retiradas 15 bolas sem repetição entre 25 possíveis
 p.sucesso=.6 # = 15/25
+
+# testa igualdade entre si de todos os percentuais --> p1 = ... = p25
+cat('\nH0: percentuais de vezes que cada "bola" foi sorteada são iguais.', '\n')
+cat("p.value =", prop.test(dat$sizes, dat$last)$p.value, '\n')
+
+# testa igualdade e valor de todos os percentuais --> p1 = ... = p25 = p.sucesso
+cat('\nH0: percentuais de vezes que cada "bola" foi sorteada =', p.sucesso, '\n')
+cat('p.value =', prop.test(dat$sizes, dat$last, p=rep(p.sucesso, 25))$p.value, '\n')
+
+# p.value do teste binomial exato dos percentuais de sucesso estimado para cada número
+dat$binom.pvalue <- sapply(1:25, function(n){ binom.test(dat[n,]$sizes, dat[n,]$last, p=p.sucesso, alternative="two")$p.value })
+
+# maior tempo de espera de cada "bola" -- tamanho da subsequência mais longa
+dat$maximas <- sapply(esperas, function(it){ max(it$len) })
+
+# média do tempo de espera de cada "bola"
+dat$medias <- sapply(esperas, function(it){ mean(it$len) })
+
+# desvio padrão do tempo de espera de cada "bola"
+dat$desvio <- sapply(esperas, function(it){ sd(it$len) })
 
 # executa o teste de aderência do tempo de espera por NUMERO ~ Geométrica(p)
 gof <- function(NUMERO) {
@@ -74,11 +85,11 @@ gof <- function(NUMERO) {
 
 # extrai p-value dos testes de aderência em cada número
 options(warn=-1)
-dat$pvalue=-1
+dat$fit.pvalue=-1
 for (n in 1:25) {
   teste <- gof(n)
   output <- capture.output(summary(teste))
-  dat[n,]$pvalue <- as.numeric(sub(".+ ", "", output[grep("Pearson", output)]))
+  dat[n,]$fit.pvalue <- as.numeric(sub(".+ ", "", output[grep("Pearson", output)]))
 }
 
 plota <- function (numero) {
@@ -114,20 +125,26 @@ plota <- function (numero) {
   a <- par('usr')
   rect(a[1], a[3], a[2], a[4], col='transparent', border='gray33')
 
-  # identidade visual do número inequívoca
+  # identidade visual inequívoca do número
   text(
     sprintf("%02d", numero), x=m/2, y=.5, adj=c(.5, .5), cex=10, col='gray50'
   )
   # percentual da quantidade de vezes que a "bola" foi sorteada
   text(
     bquote(bold(hat(p)) == bold(.(sprintf("%5.4f", dat[numero,]$prop)))),
-    x=m/2, y=.25, adj=c(.5, .5), cex=4, col='gray50'
+    x=m/2, y=.25, adj=c(.5, 0), cex=2.5, col='gray50'
+  )
+
+  # p-value do teste binomial exato do percentual da quantidade...
+  text(
+    sprintf("Binomial: p.value = %6.4f", dat[numero,]$binom.pvalue),
+    x=m/2, y=.15, adj=c(.5, 0), cex=2, col=ifelse(dat[numero,]$binom.pvalue>=.05, "#0066ff", "red")
   )
 
   # p-value do teste de aderência do tempo de espera do número ~ Geométrica(.6)
   text(
-    bquote("Fit-test: P(> X²)" == .(sprintf("%6.4f", dat[numero,]$pvalue))),
-    x=m/2, y=1/8, adj=c(.5, 1), cex=2, col=ifelse(dat[numero,]$pvalue>=.05, "#0066ff", "red")
+    sprintf("Fit: p.value = %6.4f", dat[numero,]$fit.pvalue),
+    x=m/2, y=.04, adj=c(.5, 0), cex=2, col=ifelse(dat[numero,]$fit.pvalue>=.05, "#0066ff", "red")
   )
 
   # legenda das CDFs conforme plotagem inicial

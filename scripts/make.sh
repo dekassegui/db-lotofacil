@@ -1,5 +1,39 @@
 #!/bin/bash
 
+# formata indiferentemente ao separador de campos, data no formato
+# yyyy.mm.dd ou dd.mm.yyyy como data no formato yyyy-mm-dd
+full_date() {
+  # padroniza os separadores de campos
+  local d=${1//[^0-9]/-}
+  # se a data é dd-mm-yyyy então modifica para yyyy-mm-dd
+  [[ ${d:2:1} == '-' ]] && echo ${d:6:4}-${d:3:2}-${d:0:2} || echo $d
+}
+
+# formata indiferentemente ao separador de campos, data no formato
+# yyyy.mm.dd ou dd.mm.yyyy como data no formato "data por extenso"
+long_date() {
+  date -d $(full_date $1) '+%A, %d de %B de %Y'
+}
+
+# Computa a data presumida do concurso da Lotofácil anterior e mais recente que
+# a data ISO-8601 fornecida ou a data corrente do sistema em caso contrário.
+loto_date() {
+  local dia u F ndays=0
+  (( $# )) && dia=$* || dia=$(date -d'now' '+%F')
+  read u F <<< $(date -d"$dia" '+%u %F')
+  # testa se dia da semana da data referência é terça, quinta, sábado ou domingo
+  if (( $u == 2 || $u == 4 || $u > 5 )); then
+    ndays=$(( 1 + $u % 2 ))
+  # testa se horário da data referência, cujo dia da semana é segunda, quarta
+  # ou sexta, é anterior a 20:00 <-- horário usual dos sorteios
+  elif (( $(date -d"$dia" '+%s') < $(date -d "$F 20:00" '+%s') )); then
+    ndays=$(( $u > 1 ? 2 : 3 ))
+  fi
+  date -d "$F -$ndays days" '+%F'
+}
+
+echo -e '\nData presumida do sorteio mais recente: '$(long_date $(loto_date $*))'.'
+
 declare -r dbFile='loto.sqlite'
 declare -r xml='loto.xml'
 

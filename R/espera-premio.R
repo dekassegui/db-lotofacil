@@ -38,8 +38,4 @@ gof <- goodfit(
 
 cat(sprintf('\nHØ: Tempo de espera por premiação ~ Geom(%7.5f)', premiacao), '\n')
 
-s <- summary(gof)
-
-# plot(gof)
-
-#cat("P(erro I) = ", s[5], '\n')
+summary(gof)
