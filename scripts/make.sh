@@ -22,7 +22,8 @@ loto_date() {
   (( $# )) && dia=$* || dia=$(date -d'now' '+%F')
   read u F <<< $(date -d"$dia" '+%u %F')
   # testa se dia da semana da data referência é terça, quinta, sábado ou domingo
-  if (( $u == 2 || $u == 4 || $u > 5 )); then
+  # representados por 106 == 1<<(2-1) | 1<<(4-1) | 1<<(6-1) | 1<<(7-1)
+  if (( 106 & 1<<($u-1) )); then
     ndays=$(( 1 + $u % 2 ))
   # testa se horário da data referência, cujo dia da semana é segunda, quarta
   # ou sexta, é anterior a 20:00 <-- horário usual dos sorteios
@@ -32,7 +33,7 @@ loto_date() {
   date -d "$F -$ndays days" '+%F'
 }
 
-echo -e '\nData presumida do sorteio mais recente: '$(long_date $(loto_date $*))'.'
+echo -e '\nData presumida do sorteio mais recente: '$(long_date $(loto_date))'.'
 
 declare -r dbFile='loto.sqlite'
 declare -r xml='loto.xml'
