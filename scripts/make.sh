@@ -93,7 +93,7 @@ else
 fi
 
 # extrai conteúdo do zipfile para o diretório temporário
-unzip --qu $zipfile -d '/tmp'
+unzip --qu -o $zipfile -d '/tmp'
 
 # obtêm o filename do html recém extraído
 htm="/tmp/"$(unzip -l $zipfile | sed -nr '/^.*htm$/ s/^.* (\w+\.htm)$/\1/p')
