@@ -1,15 +1,13 @@
-DROP TABLE IF EXISTS param;
-DROP VIEW IF EXISTS esperas;
-DROP VIEW IF EXISTS duo;
-DROP VIEW IF EXISTS trio;
-
+/*
+ * Cria tabelas, triggers e views do esquema de pesquisa "esperas".
+*/
 BEGIN TRANSACTION;
 
 /**
    Tabela de parâmetros utilizados na consulta "esperas" que acessa o registro
    incumbente -- o único com valor da coluna "status" igual a "1".
 */
-CREATE TABLE param (
+CREATE TABLE IF NOT EXISTS param (
   s       TEXT NOT NULL                 -- string 0-1 representando alguma
            CHECK(trim(s) <> ""          -- sequência de valores lógicos
             AND NOT s GLOB "*[^01]*"),
@@ -21,14 +19,14 @@ CREATE TABLE param (
 );
 
 -- se registro foi inserido como incumbente então será o único
-CREATE TRIGGER on_param_insert AFTER INSERT ON param
+CREATE TRIGGER IF NOT EXISTS on_param_insert AFTER INSERT ON param
 WHEN new.status == 1
 BEGIN
   UPDATE param SET status=0 WHERE ROWID <> new.ROWID;
 END;
 
 -- se registro foi atualizado como incumbente então será o único
-CREATE TRIGGER on_param_update AFTER UPDATE OF status ON param
+CREATE TRIGGER IF NOT EXISTS on_param_update AFTER UPDATE OF status ON param
 WHEN old.status == 0 AND new.status == 1
 BEGIN
   UPDATE param SET status=0 WHERE ROWID <> new.ROWID;
@@ -45,7 +43,7 @@ END;
      fim <- posição do sucesso na sequência
      len <- tempo de espera pelo 1º sucesso
 */
-CREATE VIEW esperas AS
+CREATE VIEW IF NOT EXISTS esperas AS
   WITH par (s) AS (
     SELECT s FROM param WHERE status
   ), ones (n, p) AS (
@@ -57,7 +55,7 @@ CREATE VIEW esperas AS
     SELECT a.n, a.p, (a.p - b.p) FROM ones AS a JOIN ones AS b ON a.n == b.n+1;
 
 -- tabela dos valores de tempo de espera até 2º sucesso
-create view duo as
+create view IF NOT EXISTS duo as
   with uno as (
     select * from esperas
   ) select a.ndx/2 as ndx, a.fim, (
@@ -66,7 +64,7 @@ create view duo as
     from (select * from uno where ndx%2 == 0) as a;
 
 -- tabela dos valores de tempo de espera até 3º sucesso
-create view trio as
+create view IF NOT EXISTS trio as
   with uno as (
     select * from esperas
   ) select a.ndx/3 as ndx, a.fim, (
@@ -76,10 +74,10 @@ create view trio as
 
 END TRANSACTION;
 
-INSERT INTO param (comentario, s)
+/* INSERT INTO param (comentario, s)
   SELECT "premiação principal",
     group_concat(ganhadores_15_numeros>0, "") FROM concursos;
 
 INSERT INTO param (status, comentario, s)
   SELECT 1, "incidência da bola 25",
-    group_concat(bolas>>(25-1)&1, "") FROM bolas_juntadas;
+    group_concat(bolas>>(25-1)&1, "") FROM bolas_juntadas; */
