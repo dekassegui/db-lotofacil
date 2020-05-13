@@ -5,8 +5,7 @@ library(vcd)        # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 
 con <- dbConnect(SQLite(), "loto.sqlite")
 
-if (!dbExistsTable(con, "esperas")) stop('Erro: consulta "esperas" não
-  existe no db.\n\n\tExecute o script "scripts/add-esperas.sh" na linha de comando.\n\n')
+if (!dbExistsTable(con, "esperas")) stop('Erro: consulta "esperas" não existe no db.\n\n\tExecute o script "scripts/add-esperas.sh" na linha de comando.\n\n')
 
 bolas <- 1:25   # sequência da numeração das bolas
 
@@ -14,15 +13,15 @@ bolas <- 1:25   # sequência da numeração das bolas
 # tabela "param", inserindo os registros inexistentes e finalmente, imprime o
 # conteúdo da tabela.
 (function () {
-    fmt <- c("insert into param (s, comentario) select group_concat(bolas>>(%1$d-1)&1, ''), 'incidências da bola %1$d' from bolas_juntadas", "update param set s=(select group_concat(bolas>>(%1$d-1)&1, '') from bolas_juntadas) where comentario glob '* %1$d'")
-    for (bola in bolas) {
-      n <- 1 + dbGetQuery(con, sprintf("select exists(select 1 from param where comentario glob '* %d')", bola))[1,1]
-      dbExecute(con, sprintf(fmt[n], bola))
-    }
-    # output de resumo
-    cat('\nTabela "param":\n\n')
-    print(dbGetQuery(con, "select printf('%2d', rowid) as rowid, comentario, substr(s, 1, 10)||'…'||substr(s, -10) as s, length(s) as len, status from param"))
-    cat("\n")
+  fmt <- c("insert into param (s, comentario) select group_concat(bolas>>(%1$d-1)&1, ''), 'incidências da bola %1$d' from bolas_juntadas", "update param set s=(select group_concat(bolas>>(%1$d-1)&1, '') from bolas_juntadas) where comentario glob '* %1$d'")
+  for (bola in bolas) {
+    n <- 1+dbGetQuery(con, sprintf("select exists(select 1 from param where comentario glob '* %d')", bola))[1,1]
+    dbExecute(con, sprintf(fmt[n], bola))
+  }
+  # resumo do conteúdo
+  cat('\nTabela "param":\n\n')
+  print(dbGetQuery(con, "select printf('%2d', rowid) as rowid, comentario, substr(s, 1, 10)||'…'||substr(s, -10) as s, length(s) as len, status from param"))
+  cat("\n")
 })()
 
 options(warn=-1)  # no warnings this time
@@ -60,7 +59,7 @@ gof <- function (n.sucessos, p.sucesso=3/5) {
 
 cat('> Processando')
 inicio <- Sys.time()
-iter <- 0;
+iter <- 0
 
 fit <- data.frame(bolas)  # storage dos p.value, tal que o número de ordem de
                           # cada coluna corresponde ao "número de sucessos"
@@ -79,7 +78,7 @@ while ((mask > 0) && (try.sucessos < 8)) {
     # checa se bola pertence ao conjunto
     if (bitwAnd(bitwShiftR(mask, bola-1), 1) == 1) {
       iter <- iter+1
-      cat('.', sep='')
+      cat('.')
       # torna incumbente, o registro da bola na tabela "param"
       dbExecute(con, sprintf("update param set status=1 where comentario glob '* %d'", bola))
       # aplica o teste de aderência aos valores de tempo de espera da bola
