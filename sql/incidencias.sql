@@ -5,8 +5,8 @@
  *  numa sequência de resultados lógicos – tabulando:
  *
  *    ndx: número de ordem da identificação
- *    ini: posição inicial da subsequência
- *    len: tamanho da subsequência
+ *    ini: posição inicial da subsequência  – número serial do concurso inicial
+ *    len: comprimento da subsequência      – número de concursos consecutivos
 */
 create view if not exists incidencias as
   with recursive par (s) as (
@@ -19,6 +19,6 @@ create view if not exists incidencias as
   ) select n as ndx, i as ini,
         instr(substr(s, i), "0")-1 as len
       from (
-        select s||"0" as s  -- artifício para medir a possível
-          from par          -- sequência na extremidade direita
+        select s||"0" as s  -- apêndice "0" é artifício p/calcular comprimento
+          from par          -- de possível subsequência na extremidade direita
       ), ones;
