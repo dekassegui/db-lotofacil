@@ -2,15 +2,16 @@
  * Consulta das sequências de 2+ incidências de sucesso – concurso com 1+
  * acertadores das 15 bolas – na mais recente série de concursos da Lotofácil,
  * agregando o número serial do concurso que termina a sequência, as datas dos
- * concursos e total de ganhadores entre o concurso inicial e final inclusive.
- * O conteúdo preexistente da tabela "param", antes da execução desse script,
- * é preservado e o resultado é armazenado na tabela temporária "repeticoes".
+ * concursos e total de ganhadores entre o concurso inicial e final inclusive,
+ * preservando o resultado na tabela temporária "repeticoes".
 */
 
-drop table if exists bag;
-create temp table bag as
-  -- tenta preservar o rowid do registro incumbente da tabela "param"
-  -- usando o valor impossível "0" se não houver
+drop table if exists urna;
+create temp table urna(id INTEGER);
+
+-- tenta preservar o rowid do registro incumbente da tabela "param"
+-- usando o valor impossível "0" se não existir
+insert into urna
   select case exists(select 1 from param where status)
     when 1 then (select rowid from param where status) else 0 end;
 
@@ -43,13 +44,14 @@ create temp table repeticoes as
     from cte join concursos on fim == concurso;
 
 -- "pretty print" da tabela "repetições" ordenada pelo número de ganhadores
-select printf("%4d ", ndx),
+select printf("%3d", ndx),
   printf("%4d", ini), strftime("%d-%m-%Y", iniDate),
   printf("%4d", fim), strftime("%d-%m-%Y", fimDate),
-  printf("%3d", len), printf("%4d", ganhadores)
+  printf("%2d", len), printf("%3d", ganhadores),
+  printf("%5.2f", ganhadores/1.0/len)
 from repeticoes order by ganhadores;
 
--- desfaz a atualização da tabela com rowid preservado inicialmente
+-- restaura a tabela "param" excluindo o registro incumbente que volta a ser
+-- aquele cujo rowid foi ínicialmente preservado na "urna"
 delete from param where status;
-update param set status=1 where rowid == (select * from bag);
-drop table bag;
+update param set status=1 where rowid == (select id from urna);
