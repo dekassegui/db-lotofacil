@@ -1,4 +1,4 @@
-# db-lotof-cil
+# db-lotofacil
 
 Criação/manutenção do DB da Lotofácil, com dados baixados do website da Caixa Econômica Federal - Loterias.
 

@@ -5,7 +5,7 @@ library(vcd)        # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 
 con <- dbConnect(SQLite(), "loto.sqlite")
 
-if (!dbExistsTable(con, "esperas")) stop('Erro: consulta "esperas" não existe no db.\n\n\tExecute o script "scripts/add-esperas.sh" na linha de comando.\n\n')
+if (!dbExistsTable(con, "param")) stop('Esquema "param" não está disponível.\n\n\tExecute o script "scripts/param.sh" na linha de comando.\n\n')
 
 bolas <- 1:25   # sequência da numeração das bolas
 
@@ -13,14 +13,17 @@ bolas <- 1:25   # sequência da numeração das bolas
 # tabela "param", inserindo os registros inexistentes e finalmente, imprime o
 # conteúdo da tabela.
 (function () {
-  fmt <- c("insert into param (s, comentario) select group_concat(bolas>>(%1$d-1)&1, ''), 'incidências da bola %1$d' from bolas_juntadas", "update param set s=(select group_concat(bolas>>(%1$d-1)&1, '') from bolas_juntadas) where comentario glob '* %1$d'")
+  fmt <- c(
+    "INSERT INTO param (s, comentario) SELECT GROUP_CONCAT(bolas>>(%1$d-1)&1, ''), 'incidências da bola %1$d' FROM bolas_juntadas",
+    "UPDATE param SET s=(SELECT GROUP_CONCAT(bolas>>(%1$d-1)&1, '') FROM bolas_juntadas) WHERE comentario GLOB '* %1$d'"
+  )
   for (bola in bolas) {
-    n <- 1+dbGetQuery(con, sprintf("select exists(select 1 from param where comentario glob '* %d')", bola))[1,1]
+    n <- 1 + dbGetQuery(con, sprintf("SELECT EXISTS(SELECT 1 FROM param WHERE comentario GLOB '* %d')", bola))[1, 1]
     dbExecute(con, sprintf(fmt[n], bola))
   }
   # resumo do conteúdo
   cat('\nTabela "param":\n\n')
-  print(dbGetQuery(con, "select printf('%2d', rowid) as rowid, comentario, substr(s, 1, 10)||'…'||substr(s, -10) as s, length(s) as len, status from param"))
+  print(dbGetQuery(con, "SELECT PRINTF('%2d', rowid) AS rowid, comentario, SUBSTR(s, 1, 10)||'...'||SUBSTR(s, -10) AS s, LENGTH(s) AS len, status FROM param"))
   cat("\n")
 })()
 
@@ -28,12 +31,12 @@ options(warn=-1)  # no warnings this time
 
 # string para requisição parametrizada dos valores de "tempo de espera por
 # NUMERO sucessos" na sequência do registro incumbente da tabela "param"
-query <- "with uno as (
-  select * from esperas
-) select a.ndx/$NUMERO as ndx, a.fim, (
-      select sum(len) from uno where ndx between a.ndx-$NUMERO+1 and a.ndx
-    ) as len
-  from (select * from uno where ndx%$NUMERO == 0) AS a"
+query <- "WITH uno AS (
+  SELECT * FROM esperas
+) SELECT a.ndx/$NUMERO AS ndx, a.fim, (
+      SELECT SUM(len) FROM uno WHERE ndx BETWEEN a.ndx-$NUMERO+1 AND a.ndx
+    ) AS len
+  FROM (SELECT * FROM uno WHERE ndx%$NUMERO == 0) AS a"
 
 # Retorna o objeto resultante do teste de aderência aplicado aos valores de
 # tempo de espera por "n.sucessos", que também é parâmetro da distribuição de
@@ -57,9 +60,10 @@ gof <- function (n.sucessos, p.sucesso=3/5) {
 # hipótese esta, que não deve ser rejeitada ao nível de significância de 5%.
 # ----------------------------------------------------------------------------
 
-cat('> Processando')
-inicio <- Sys.time()
-iter <- 0
+cat('> Processando'); inicio <- Sys.time(); iter <- 0
+
+esperas <- list(type="vector", 25)  # storage dos comprimentos observados dos
+                                    # tempos de espera por primeiro sucesso
 
 fit <- data.frame(bolas)  # storage dos p.value, tal que o número de ordem de
                           # cada coluna corresponde ao "número de sucessos"
@@ -77,12 +81,13 @@ while ((mask > 0) && (try.sucessos < 8)) {
   for (bola in bolas)
     # checa se bola pertence ao conjunto
     if (bitwAnd(bitwShiftR(mask, bola-1), 1) == 1) {
-      iter <- iter+1
-      cat('.')
+      iter <- iter+1; cat('.')
       # torna incumbente, o registro da bola na tabela "param"
-      dbExecute(con, sprintf("update param set status=1 where comentario glob '* %d'", bola))
+      dbExecute(con, sprintf("UPDATE param SET status=1 WHERE comentario GLOB '* %d'", bola))
       # aplica o teste de aderência aos valores de tempo de espera da bola
       teste <- gof(try.sucessos)
+      # alista os valores observados de tempo de espera por primeiro sucesso
+      if (try.sucessos == 1) { esperas[[bola]] <- dat$len }
       # captura o sumário do teste recém aplicado
       output <- capture.output(summary(teste))
       # extrai o valor do p.value via teste de aderência de Neyman Pearson
@@ -95,9 +100,7 @@ while ((mask > 0) && (try.sucessos < 8)) {
       # o tempo de espera da "bola" segue distribuição "binomial negativa" com
       # parâmetros "n.sucessos" igual ao valor de try.sucessos e "p.sucesso"
       # igual a 15/25
-      if (pvalue >= .05) {
-        mask <- bitwAnd(mask, bitwNot(bitwShiftL(1, bola-1)))
-      }
+      if (pvalue >= .05) mask <- bitwAnd(mask, bitwNot(bitwShiftL(1, bola-1)))
     }
 }
 
@@ -106,8 +109,49 @@ cat('finalizado.\n\n #iterações:', iter, '\n  exec_time:', difftime(Sys.time()
 colnames(fit) <- sprintf("SIZE=%d", 1:try.sucessos)
 rownames(fit) <- sprintf("BOLA_%02d", bolas)
 
+cores <- rep_len(c('#ffcc66', '#aaffaa'), 25)
+borda <- rep_len(c('#ff0000', '#009900'), 25)
+
 cat('Bolas agrupadas pelo parâmetro "número de sucessos" da distribuição de\nprobabilidades de seus tempos de espera ~ Binomial negativa(n.sucessos, 0.6).\n')
 for (n in 1:try.sucessos) {
-  bolas <- which(fit[, n] >= .05)
-  if (length(bolas) > 0) cat('\n n.sucessos =', n, '-->', bolas, '\n')
+  elenco <- which(fit[, n] >= .05)
+  if (length(elenco) > 0) {
+    cat('\n n.sucessos =', n, '-->', elenco, '\n')
+    # modifica a cor da borda e de preenchimento do box para outra com opacidade
+    # proporcional ao parâmetro "número de sucessos" constatado, que implica bom
+    # ajuste de alguma sequência à distribuição Binomial negativa
+    if (n > 1) {
+      borda[elenco] <- "gray11"
+      cores[elenco] <- sprintf("#9966ff%02x", trunc(255/n))
+    }
+  }
 }
+
+png(
+  filename="img/estocastico.png", width=700, height=700,
+  family="Roboto Condensed", pointsize=16
+)
+
+par(
+  mar=c(5.25, 3.75, 2.5, 1), mgp=c(2.3125, .75, 0), fg="dimgray",
+  cex.main=1.5, col.main="slategray4", cex.lab=1.25, font.lab=2,
+  col.lab="slategray4", cex.axis=1.125, font.axis=2, col.axis="gray10"
+)
+
+boxplot(
+  esperas, names=sprintf("%02d", bolas), las=1, col=cores, border=borda,
+  pch=18, pars=list(whisklty='solid', boxwex=.6, outcex=.8), xlab="bolas",
+  ylab="número de concursos", main="tempo de espera por 1º sucesso"
+)
+rug(side=2, seq.int(1, 13, 2), ticksize=-.0125, lwd=.9)
+
+mtext(
+  "bom ajuste \u21d4 número de sucessos ≥ 2", col="#9966ff", font=2, cex=1.125,
+  side=1, at=26.5, line=4, adj=1
+)
+
+dev.off()
+
+cat("\nHØ: Sequências observadas de tempo de espera por primeiro sucesso têm a mesma distribuição de valores.\n")
+kr <- kruskal.test(esperas)
+print(kr)
