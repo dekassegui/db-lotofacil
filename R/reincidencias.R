@@ -35,7 +35,7 @@ possiveis <- 5:15   # quantidades possíveis de bolas reincidentes nos concursos
 # então seleciona os valores correspondentes às quantidades possíveis
 frequencias <- tabulate(
     tabulate(dat$concurso), # conta as bolas reincidentes em cada concurso
-    nbins=15                # número de grupos de concursos com mesma quantidade
+    nbins=15                # número de grupos de concursos c/mesma quantidade
                             # -- 1 a 15 -- de bolas reincidentes
   )[possiveis]              # seleção dos valores contabilizados
 
@@ -64,7 +64,7 @@ barplot(frequencias, col=c('#33cc66', '#6666ff'), ylim=c(0, major))
 
 rug(side=2, seq(50, major, 100), ticksize=-.0125, lwd=1)  # submarcas da escala
 
-abline(h=seq(50, major, 50), lty="dotted", col='gray88')  # linhas de referência
+abline(h=seq(50, major, 50), lty=3, col='gray88')  # linhas de referência
 
 title(main="Reincidências nos Concursos da Lotofácil", line=2.3)
 title(xlab="número de bolas reincidentes", line=2.1)

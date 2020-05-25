@@ -1,6 +1,9 @@
 #!/usr/bin/Rscript --no-init-file
 
 library(RSQLite)    # r-cran-sqlite <-- Database Interface R driver for SQLite
+
+source("R/param.R")   # checa disponibilidade da tabela "param" + atualização
+
 library(vcd)        # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 library(RcmdrMisc)  # r-cran-rcmdr  <-- GNU R package for miscellaneous Rcmdr utilities
 
@@ -9,31 +12,12 @@ con <- dbConnect(SQLite(), 'loto.sqlite')
 # alocação da lista das sequências dos tempos de espera para cada NUMERO
 esperas <- vector("list", 25)
 
-# Query paramétrica para computar a sequência dos tempos de espera por concurso
-# em que NUMERO foi sorteado, na série histórica de concursos, onde:
-#
-#   ndx --> número de ordem na sequência
-#   fim --> número serial do concurso em que NUMERO foi sorteado
-#   len --> quantidade de concursos até que NUMERO foi sorteado
-#
-query="with cte(s) as (
-  select group_concat(bolas >> ($NUMERO-1) & 1, '') from bolas_juntadas
-), ones(n, p) as (
-  select 1, instr(s, '1') from cte
-  union all
-  select n+1, p+instr(substr(s, p+1), '1') as m from cte, ones where m > p
-) select n as ndx, p as fim, p as len from ones where n == 1
-  union all
-  select t.n, t.p, t.p-z.p from ones as t join ones as z on t.n == z.n+1"
-
 # loop para preenchimento da lista de sequências dos tempos de espera para cada
 # NUMERO -- time expensive due to sql performance
-rs <- dbSendQuery(con, query)
 for (n in 1:25) {
-  dbBind(rs, list('NUMERO'=n))
-  esperas[[n]] <- dbFetch(rs)
+  dbExecute(con, sprintf('update param set status=1 where comentario glob "* %d"', n))
+  esperas[[n]] <- dbReadTable(con, 'esperas')
 }
-dbClearResult(rs)
 
 dbDisconnect(con)
 
@@ -56,7 +40,7 @@ cat("p.value =", prop.test(dat$sizes, dat$last)$p.value, '\n')
 
 # testa igualdade e valor de todos os percentuais --> p1 = ... = p25 = p.sucesso
 cat('\nH0: percentuais de vezes que cada "bola" foi sorteada =', p.sucesso, '\n')
-cat('p.value =', prop.test(dat$sizes, dat$last, p=rep(p.sucesso, 25))$p.value, '\n')
+cat('p.value =', prop.test(dat$sizes, dat$last, p=rep(p.sucesso, 25))$p.value, '\n\n')
 
 # p.value do teste binomial exato dos percentuais de sucesso estimado para cada número
 dat$binom.pvalue <- sapply(1:25, function(n){ binom.test(dat[n,]$sizes, dat[n,]$last, p=p.sucesso, alternative="two")$p.value })
@@ -70,12 +54,14 @@ dat$medias <- sapply(esperas, function(it){ mean(it$len) })
 # desvio padrão do tempo de espera de cada "bola"
 dat$desvio <- sapply(esperas, function(it){ sd(it$len) })
 
+options(warn=-1)
+
 # executa o teste de aderência do tempo de espera por NUMERO ~ Geométrica(p)
 gof <- function(NUMERO) {
   NUMERO=ifelse(NUMERO<1, 1, ifelse(NUMERO>25, 25, NUMERO))
   goodfit(
     table(esperas[[NUMERO]]$len-1), # tabela de contingência adequada tal que
-    type="nbinomial",               # Binomial_negativa(1, p) == Geometrica(p)
+    type="nbinomial",               # Binomial_negativa(1, p) = Geometrica(p)
     par=list(
       size=1,
       prob=p.sucesso
@@ -84,12 +70,11 @@ gof <- function(NUMERO) {
 }
 
 # extrai p-value dos testes de aderência em cada número
-options(warn=-1)
-dat$fit.pvalue=-1
+dat$fit.pvalue <- -1
 for (n in 1:25) {
   teste <- gof(n)
-  output <- capture.output(summary(teste))
-  dat[n,]$fit.pvalue <- as.numeric(sub(".+ ", "", output[grep("Pearson", output)]))
+  out <- capture.output(summary(teste))
+  dat[n,]$fit.pvalue <- as.numeric(sub(".+ ", "", out[grep("Pearson", out)]))
 }
 
 plota <- function (numero) {

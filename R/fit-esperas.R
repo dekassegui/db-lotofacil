@@ -3,33 +3,15 @@
 library(RSQLite)    # r-cran-sqlite <-- Database Interface R driver for SQLite
 library(vcd)        # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 
-con <- dbConnect(SQLite(), "loto.sqlite")
+source("R/param.R")   # checa disponibilidade da tabela "param" + atualização
 
-if (!dbExistsTable(con, "param")) stop('Esquema "param" não está disponível.\n\n\tExecute o script "scripts/param.sh" na linha de comando.\n\n')
+con <- dbConnect(SQLite(), "loto.sqlite")
 
 bolas <- 1:25   # sequência da numeração das bolas
 
-# Atualização automática das sequências de incidências das bolas armazenadas na
-# tabela "param", inserindo os registros inexistentes e finalmente, imprime o
-# conteúdo da tabela.
-(function () {
-  fmt <- c(
-    "INSERT INTO param (s, comentario) SELECT GROUP_CONCAT(bolas>>(%1$d-1)&1, ''), 'incidências da bola %1$d' FROM bolas_juntadas",
-    "UPDATE param SET s=(SELECT GROUP_CONCAT(bolas>>(%1$d-1)&1, '') FROM bolas_juntadas) WHERE comentario GLOB '* %1$d'"
-  )
-  for (bola in bolas) {
-    n <- 1 + dbGetQuery(con, sprintf("SELECT EXISTS(SELECT 1 FROM param WHERE comentario GLOB '* %d')", bola))[1, 1]
-    dbExecute(con, sprintf(fmt[n], bola))
-  }
-  # resumo do conteúdo
-  cat('\nTabela "param":\n\n')
-  print(dbGetQuery(con, "SELECT PRINTF('%2d', rowid) AS rowid, comentario, SUBSTR(s, 1, 10)||'...'||SUBSTR(s, -10) AS s, LENGTH(s) AS len, status FROM param"))
-  cat("\n")
-})()
-
 options(warn=-1)  # no warnings this time
 
-# string para requisição parametrizada dos valores de "tempo de espera por
+# string para requisição paramétrica dos valores de "tempo de espera por
 # NUMERO sucessos" na sequência do registro incumbente da tabela "param"
 query <- "WITH uno AS (
   SELECT * FROM esperas

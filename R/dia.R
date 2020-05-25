@@ -7,6 +7,8 @@
 library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
 library(vcd)      # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 
+source("R/param.R")   # checa disponibilidade da tabela "param" + atualização
+
 con <- dbConnect(SQLite(), "loto.sqlite")
 
 # requisita o número do concurso mais recente, número de concursos acumulados
@@ -19,27 +21,7 @@ loto <- dbGetQuery(con, "WITH cte(m, n) AS (
 # requisita frequências, latências e atipicidades dos números no concurso mais recente
 numeros <- dbGetQuery(con, "SELECT frequencia, latencia, atipico FROM info_bolas ORDER BY bola")
 
-numeros$maxLatencia <- rep.int(0, 25) # alocação do vector das máximas latências
-
-# query paramétrica para requisitar a sequência dos tempos de espera por
-# NUMERO na série histórica dos concursos
-rs <- dbSendQuery(con, "with cte(s) as (
-  select group_concat(bolas >> ($NUMERO-1) & 1, '') from bolas_juntadas
-), ones(n, p) as (
-  select 1, instr(s, '1') from cte
-  union all
-  select n+1, p+instr(substr(s, p+1), '1') as m from cte, ones where m > p
-) select p as espera from ones where n == 1
-  union all
-  select t.p-z.p from ones as t join ones as z on t.n == z.n+1")
-
-# loop das requisições das sequências dos tempos de espera de cada NUMERO
-for (n in 1:25) {
-  dbBind(rs, list("NUMERO"=n))
-  dat <- dbFetch(rs)
-  numeros$maxLatencia[n] <- max(dat$espera)-1  # máxima latência do NUMERO
-}
-dbClearResult(rs)
+numeros$maxLatencia <- sapply(1:25, function(n){ dbExecute(con, sprintf('update param set status=1 where comentario glob "* %d"', n)); dbGetQuery(con, 'select max(len)-1 from esperas')[1, 1] })
 
 # requisita os números sorteados no concurso anterior ao mais recente
 anterior <- dbGetQuery(con, paste("SELECT bola FROM bolas_sorteadas WHERE concurso+1 ==", loto$concurso))
@@ -48,7 +30,7 @@ anterior <- dbGetQuery(con, paste("SELECT bola FROM bolas_sorteadas WHERE concur
 esperas <- dbGetQuery(con, 'SELECT len FROM espera')
 
 dbDisconnect(con)
-rm(con, dat, rs)
+rm(con)
 
 # testa HØ: números ~ U(1, 25)
 teste <- chisq.test(numeros$frequencia, correct=F)
@@ -64,7 +46,7 @@ teste <- goodfit(
   )
 )
 texto <- capture.output(summary(teste))
-pvalue <- as.numeric(sub("^.+ (\\S+)$", "\\1", texto[grep("Pearson", texto)]))
+pvalue <- as.numeric(sub(".+ ", "", texto[grep("Pearson", texto)]))
 y <- ifelse(pvalue >= .05, 1, 2)
 
 rm(esperas, teste, texto, pvalue)

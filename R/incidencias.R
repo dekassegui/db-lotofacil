@@ -3,34 +3,20 @@
 library(RSQLite)    # r-cran-sqlite <-- Database Interface R driver for SQLite
 library(vcd)        # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 
+source("R/param.R")   # checa disponibilidade da tabela "param" + atualização
+
 con <- dbConnect(SQLite(), "loto.sqlite")
 
-if (!dbExistsTable(con, "param")) stop('Esquema "param" não está disponível.\n\n\tExecute o script "scripts/param.sh" na linha de comando.\n\n')
-
-cat("Processando")
+showParam(con)
 
 bolas <- 1:25   # sequência da numeração das bolas
 
-lista <- list(type="vector", 25)  # lista dos comprimentos das sequências
-                                  # de 1+ sucessos consecutivos
-
-# Atualização automática das sequências de incidências das bolas armazenadas na
-# tabela "param", inserindo registros inexistentes se necessáro, alistando os
-# comprimentos das sequências de 1+ sucessos das bolas, então resume a tabela
-fmt <- c("INSERT INTO param (s, comentario, status) SELECT GROUP_CONCAT(bolas>>(%1$d-1)&1, ''), 'incidências da bola %1$d', 1 FROM bolas_juntadas", "UPDATE param SET s=(SELECT GROUP_CONCAT(bolas>>(%1$d-1)&1, '') FROM bolas_juntadas), status=1 WHERE comentario GLOB '* %1$d'")
-for (bola in bolas) {
-  cat(".")
-  n <- 1 + dbGetQuery(con, sprintf("SELECT EXISTS(SELECT 1 FROM param WHERE comentario GLOB '* %d')", bola))[1, 1]
-  dbExecute(con, sprintf(fmt[n], bola))
-  # carrega os comprimentos das sequências de 1+ sucessos consecutivos
-  lista[[bola]] <- dbReadTable(con, 'incidencias')$len
-}
+# lista dos comprimentos das sequências de 1+ sucessos consecutivos
+lista <- lapply(bolas, function(bola){
+  dbExecute(con, sprintf('update param set status=1 where comentario glob "* %d"', bola))
+  dbReadTable(con, 'incidencias')$len
+})
 names(lista) <- sprintf("BOLA_%02d", bolas)
-cat('finalizado.\n\n')
-# resumo do conteúdo da tabela "param"
-cat('Tabela "param":\n\n')
-print(dbGetQuery(con, "SELECT PRINTF('%2d', rowid) AS rowid, comentario, SUBSTR(s, 1, 10)||'…'||SUBSTR(s, -10) AS s, length(s) AS len, status FROM param"))
-cat("\n")
 
 resumo <- data.frame(bolas, bolas, bolas, bolas, bolas)
 colnames(resumo) <- c("count", "media", "desvio", "maximo", "2+")
