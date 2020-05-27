@@ -1,29 +1,21 @@
 #!/usr/bin/Rscript --slave --no-restore
 
+# Teste da equiprobabilidade de sorteio das bolas, fundamentado nas frequências
+# contabilizadas na série histórica de concursos.
+
 library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
 
 con <- dbConnect(SQLite(), dbname='loto.sqlite')
 
-rs <- dbSendQuery(con, 'SELECT COUNT(*) AS NRECS FROM concursos')
-nrecs = dbFetch(rs)$NRECS
-dbClearResult(rs)
+dat <- dbReadTable(con, 'bolas_sorteadas')
 
-rs <- dbSendQuery(con, 'SELECT frequencia FROM info_bolas')
-datum <- dbFetch(rs)
-
-dbClearResult(rs)
 dbDisconnect(con)
 
-teste <- chisq.test(datum$frequencia, correct=FALSE)
+teste <- chisq.test(table(dat$bola), correct=FALSE)
 
-cat('Frequências das bolas nos', nrecs, 'concursos da Lotofácil:\n')
-cat('\n', datum$frequencia, '\n\n')
-cat('Teste de Aderência Chi-square\n\n')
-cat(' H0: As bolas têm distribuição uniforme.\n')
-cat(' HA: As bolas não têm distribuição uniforme.\n')
-cat(sprintf('\n\tX-square = %.4f', teste$statistic))
-cat(sprintf('\n\t      df = %d', teste$parameter))
-cat(sprintf('\n\t p-value = %.4f', teste$p.value))
+cat('\nFrequências das bolas nos', length(unique(dat$concurso)), 'concursos da Lotofácil:\n')
+print(teste$observed)
+cat('\n H0: As bolas são equiprováveis.', ' HA: As bolas não são equiprováveis.', '\n Teste de Aderência X² de Pearson', sprintf('\n\t%15s = %.4f\n\t%14s = %d\n\t%14s = %.4f', 'sample X²', teste$statistic, 'df', teste$parameter, 'p.value', teste$p.value), sep='\n')
 
 if (teste$p.value > 0.05) action='Não rejeitamos' else action='Rejeitamos'
-cat('\n\n', 'Conclusão:', action, 'H0 conforme evidências estatísticas.\n\n')
+cat('\n Conclusão:', action, 'H0 conforme evidências estatísticas.\n\n')

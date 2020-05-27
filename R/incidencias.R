@@ -1,5 +1,8 @@
 #!/usr/bin/Rscript --no-init-file
 
+# Pesquisa preliminar das sequências de 1+ sorteios de bolas na série histórica
+# de concursos da Lotofácil.
+
 library(RSQLite)    # r-cran-sqlite <-- Database Interface R driver for SQLite
 library(vcd)        # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 
@@ -37,7 +40,7 @@ cat('Conclusão:', ifelse(kr$p.value >= .05, "Não rejeitamos", "Rejeitamos"),
 
 fname="img/repeticoes.png"
 png(
-  filename=fname, width=700, height=700,
+  filename=fname, width=600, height=600,
   family="Roboto Condensed", pointsize=18
 )
 par(

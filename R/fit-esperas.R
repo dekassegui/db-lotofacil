@@ -1,5 +1,8 @@
 #!/usr/bin/Rscript --no-init-file
 
+# Pesquisa complementar dos tempos de espera das bolas na série histórica de
+# concursos da Lotofácil.
+
 library(RSQLite)    # r-cran-sqlite <-- Database Interface R driver for SQLite
 library(vcd)        # r-cran-vcd    <-- GNU R Visualizing Categorical Data
 
@@ -91,8 +94,8 @@ cat('finalizado.\n\n #iterações:', iter, '\n  exec_time:', difftime(Sys.time()
 colnames(fit) <- sprintf("SIZE=%d", 1:try.sucessos)
 rownames(fit) <- sprintf("BOLA_%02d", bolas)
 
-cores <- rep_len(c('#ffcc66', '#aaffaa'), 25)
-borda <- rep_len(c('#ff0000', '#009900'), 25)
+cores <- rep_len(c('#99ccff', '#a3ffa0'), 25)
+borda <- rep_len(c('#0066ff', '#009900'), 25)
 
 cat('Bolas agrupadas pelo parâmetro "número de sucessos" da distribuição de\nprobabilidades de seus tempos de espera ~ Binomial negativa(n.sucessos, 0.6).\n')
 for (n in 1:try.sucessos) {
@@ -103,14 +106,14 @@ for (n in 1:try.sucessos) {
     # proporcional ao parâmetro "número de sucessos" constatado, que implica bom
     # ajuste de alguma sequência à distribuição Binomial negativa
     if (n > 1) {
-      borda[elenco] <- "gray11"
-      cores[elenco] <- sprintf("#9966ff%02x", trunc(255/n))
+      borda[elenco] <- "darkmagenta"
+      cores[elenco] <- sprintf("#ff0000%02x", trunc(255*(n-1)/try.sucessos))
     }
   }
 }
 
 png(
-  filename="img/estocastico.png", width=700, height=700,
+  filename="img/estocastico.png", width=600, height=600,
   family="Roboto Condensed", pointsize=16
 )
 
@@ -128,8 +131,8 @@ boxplot(
 rug(side=2, seq.int(1, 13, 2), ticksize=-.0125, lwd=.9)
 
 mtext(
-  "bom ajuste \u21d4 número de sucessos ≥ 2", col="#9966ff", font=2, cex=1.125,
-  side=1, at=26.5, line=4, adj=1
+  "bom ajuste \u21d4 número de sucessos ≥ 2", col="#ff0000c3", font=2,
+  cex=1.125, side=1, at=-3.5, line=4, adj=0
 )
 
 dev.off()

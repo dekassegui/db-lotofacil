@@ -1,13 +1,13 @@
 #!/usr/bin/Rscript --no-init-file
 
-library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
-
-con <- dbConnect(SQLite(), 'loto.sqlite')
-
 # Reincidência é evento em que um ou mais elementos arbitrários de conjunto
 # finito são sorteados em concursos consecutivos. Na Lotofácil, a cada concurso
 # são sorteadas 15 de 25 bolas distintas, portanto ocorre reincidência ao menos
 # de 5 e no máximo de 15 bolas a partir do segundo concurso.
+
+library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
+
+con <- dbConnect(SQLite(), 'loto.sqlite')
 
 # data frame de ids seriais de concursos e respectivas bolas reincidentes
 dat <- dbGetQuery(con, 'SELECT a.concurso, a.bola

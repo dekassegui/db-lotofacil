@@ -25,8 +25,8 @@ if (dbGetQuery(con, 'SELECT EXISTS(SELECT 1 FROM param WHERE comentario == "prem
 }
 dbExecute(con, sql)
 
+# pretty print da tabela "param"
 showParam <- function(conn) {
-  # resumo do conteúdo da tabela "param"
   cat('Tabela "param":\n\n')
   print(dbGetQuery(conn, "SELECT PRINTF('%2d', rowid) AS rowid, comentario, SUBSTR(s, 1, 10)||'...'||SUBSTR(s, -10) AS s, LENGTH(s) AS len, status FROM param"))
   cat("\n")

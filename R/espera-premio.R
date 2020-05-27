@@ -1,5 +1,8 @@
 #!/usr/bin/Rscript --no-init-file
 
+# Script para análise a priori dos tempos de espera das premiações de 1+ apostas
+# de acertadores das 15 bolas na série histórica de concursos da Lotofácil.
+
 library(RSQLite)    # r-cran-sqlite <-- Database Interface R driver for SQLite
 
 source("R/param.R")   # checa disponibilidade da tabela "param" + atualização

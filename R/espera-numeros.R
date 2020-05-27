@@ -1,5 +1,8 @@
 #!/usr/bin/Rscript --no-init-file
 
+# Script para análise a priori dos tempos de espera das bolas na série histórica
+# de concursos da Lotofácil.
+
 library(RSQLite)    # r-cran-sqlite <-- Database Interface R driver for SQLite
 
 source("R/param.R")   # checa disponibilidade da tabela "param" + atualização
@@ -9,15 +12,10 @@ library(RcmdrMisc)  # r-cran-rcmdr  <-- GNU R package for miscellaneous Rcmdr ut
 
 con <- dbConnect(SQLite(), 'loto.sqlite')
 
-# alocação da lista das sequências dos tempos de espera para cada NUMERO
-esperas <- vector("list", 25)
+bolas <- 1:25   # sequência mais utilizada nesse script
 
-# loop para preenchimento da lista de sequências dos tempos de espera para cada
-# NUMERO -- time expensive due to sql performance
-for (n in 1:25) {
-  dbExecute(con, sprintf('update param set status=1 where comentario glob "* %d"', n))
-  esperas[[n]] <- dbReadTable(con, 'esperas')
-}
+# lista das sequências dos tempos de espera de cada bola
+esperas <- lapply(bolas, function(n){ dbExecute(con, sprintf('UPDATE param SET status=1 WHERE comentario GLOB "* %d"', n)); dbReadTable(con, 'esperas') })
 
 dbDisconnect(con)
 
@@ -42,8 +40,8 @@ cat("p.value =", prop.test(dat$sizes, dat$last)$p.value, '\n')
 cat('\nH0: percentuais de vezes que cada "bola" foi sorteada =', p.sucesso, '\n')
 cat('p.value =', prop.test(dat$sizes, dat$last, p=rep(p.sucesso, 25))$p.value, '\n\n')
 
-# p.value do teste binomial exato dos percentuais de sucesso estimado para cada número
-dat$binom.pvalue <- sapply(1:25, function(n){ binom.test(dat[n,]$sizes, dat[n,]$last, p=p.sucesso, alternative="two")$p.value })
+# p.value do teste binomial exato dos percentuais de sucesso estimado para cada bola
+dat$binom.pvalue <- sapply(bolas, function(n){ binom.test(dat[n,]$sizes, dat[n,]$last, p=p.sucesso, alternative="two")$p.value })
 
 # maior tempo de espera de cada "bola" -- tamanho da subsequência mais longa
 dat$maximas <- sapply(esperas, function(it){ max(it$len) })
@@ -60,8 +58,8 @@ options(warn=-1)
 gof <- function(NUMERO) {
   NUMERO=ifelse(NUMERO<1, 1, ifelse(NUMERO>25, 25, NUMERO))
   goodfit(
-    table(esperas[[NUMERO]]$len-1), # tabela de contingência adequada tal que
-    type="nbinomial",               # Binomial_negativa(1, p) = Geometrica(p)
+    esperas[[NUMERO]]$len-1,  # adequação para usar Binomial_negativa(1, p)
+    type="nbinomial",
     par=list(
       size=1,
       prob=p.sucesso
@@ -69,13 +67,8 @@ gof <- function(NUMERO) {
   )
 }
 
-# extrai p-value dos testes de aderência em cada número
-dat$fit.pvalue <- -1
-for (n in 1:25) {
-  teste <- gof(n)
-  out <- capture.output(summary(teste))
-  dat[n,]$fit.pvalue <- as.numeric(sub(".+ ", "", out[grep("Pearson", out)]))
-}
+# extrai p-value dos testes de aderência para cada número
+dat$fit.pvalue <- sapply(bolas, function(bola){ teste <- gof(bola); out <- capture.output(summary(teste)); as.numeric(sub(".+ ", "", out[grep("Pearson", out)])) })
 
 plota <- function (numero) {
   fname <- sprintf("img/cdf%02d.png", numero)
