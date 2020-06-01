@@ -1,7 +1,7 @@
 #!/usr/bin/Rscript --no-init-file
 
-# Pesquisa complementar dos tempos de espera das bolas na série histórica de
-# concursos da Lotofácil.
+# Análise das bolas, focando no processo estocástico associado às sequências
+# de suas incidências ou não, na série histórica de concursos da Lotofácil.
 
 library(RSQLite)    # r-cran-sqlite <-- Database Interface R driver for SQLite
 library(vcd)        # r-cran-vcd    <-- GNU R Visualizing Categorical Data

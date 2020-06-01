@@ -82,4 +82,4 @@ text(
 
 dev.off()
 
-# system(paste('display', fname))
+system(paste('display', fname))

@@ -10,7 +10,7 @@ source("R/param.R")   # checa disponibilidade da tabela "param" + atualização
 
 con <- dbConnect(SQLite(), "loto.sqlite")
 
-showParam(con)
+# showParam(con)
 
 bolas <- 1:25   # sequência da numeração das bolas
 
@@ -45,8 +45,8 @@ png(
 )
 par(
   mar=c(4, 4, 3, 1), mgp=c(2.5, .75, 0), fg="slategray",
-  cex.main=1.25, col.main="slateblue4",
-  cex.lab=1.125, font.lab=2, col.lab="slateblue4",
+  cex.main=1.25, col.main="darkslategray4",
+  cex.lab=1.125, font.lab=2, col.lab="darkslategray4",
   font.axis=2, col.axis="gray10"
 )
 bp <- boxplot(
@@ -56,4 +56,4 @@ bp <- boxplot(
 )
 rug(side=2, 1:max(bp$out), ticksize=-.0125, lwd=.95)
 dev.off()
-system(paste('display ', fname))
+system(paste('display', fname))
