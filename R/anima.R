@@ -10,7 +10,7 @@ con <- dbConnect(SQLite(), dbname='loto.sqlite')
 
 CONCURSO_MAIS_RECENTE <- dbGetQuery(con, 'SELECT MAX(concurso) FROM concursos')[1, 1]
 
-PRIMEIRO_CONCURSO <- CONCURSO_MAIS_RECENTE-155
+CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE-156+1
 
 # requisita número da bola, suas frequências, latências mais recentes e
 # valor 0-1 indicador de suas atipicidades até o concurso $NUMERO
@@ -45,13 +45,30 @@ REF="purple"
 BOX_AT=-0.35            # posição do "box & whiskers"
 BOX_COL=c("mistyrose")  # cores de preenchimento dos "box & whiskers"
 
-numeros <- dbGetQuery(con, query, param=list('NUMERO'=PRIMEIRO_CONCURSO))
-MINOR <- (min(numeros$frequencia)%/%10-0)*10 # limite inferior do eixo Y
+# menor valor de frequência a partir do concurso inicial
+numeros <- dbGetQuery(con, query, param=list('NUMERO'=CONCURSO_INICIAL))
+minor <- (min(numeros$frequencia)%/%10)*10 # limite inferior do eixo Y
 
+# maior valor de frequência a partir do concurso inicial
 numeros <- dbGetQuery(con, query, param=list('NUMERO'=CONCURSO_MAIS_RECENTE))
-MAJOR <- (max(numeros$frequencia)%/%10+1)*10 # limite superior do eixo Y
+major <- (max(numeros$frequencia)%/%10+1)*10 # limite superior do eixo Y
 
-system('rm -f video/quadros/*.png')
+yFreq <- seq.int(from=minor, to=major, by=20)
+
+rFreq <- head(yFreq, -1)+10
+
+# maior valor das latências a partir do concurso inicial
+maior <- max(sapply(CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE,
+function(CONCURSO) {
+  dbGetQuery(con, 'select max(latencia) from (select $NUMERO-max(concurso) as latencia from bolas_sorteadas where concurso <= $NUMERO group by bola)', param=list('NUMERO'=CONCURSO))[1, 1]
+}))
+
+yLat <- 0:maior
+
+labLat <- sapply(yLat, function(x) { ifelse(x%%2==0, x, "") })
+
+# exclui conteúdo produzido anteriormente
+system('rm -f video/quadros/*.png video/input.txt')
 
 # CAPA – o primeiro quadro da animação
 
@@ -71,7 +88,7 @@ text(
 )
 text(4, 3.25, "Lotofácil", adj=c(.5, .5), cex=16, font=2, col="royalblue")
 text(
-  4, 1.7, paste("Concurso", PRIMEIRO_CONCURSO, "a", CONCURSO_MAIS_RECENTE),
+  4, 1.7, paste("Concurso", CONCURSO_INICIAL, "a", CONCURSO_MAIS_RECENTE),
   adj=c(.5, 0), cex=6.1, font=2, col="gray40"
 )
 text(
@@ -80,12 +97,18 @@ text(
 )
 dev.off()
 
+# inicia o arquivo container do roteiro da animação utilizado pelo ffmpeg
 out <- file("video/input.txt", "w", encoding="UTF-8")
 cat("file ", png.filename, "\nduration 3\n", sep="'", file=out)
 
+# durações dos quadros da animação exceto a capa
+CONCURSO <- CONCURSO_MAIS_RECENTE-CONCURSO_INICIAL+1
+duration <- signif(rep.int(1/3, CONCURSO), digits=4)  # valor default
+duration[1] <- 2; duration[CONCURSO] <- 4
+
 cat("\nProcessando")
 
-for (CONCURSO in PRIMEIRO_CONCURSO:CONCURSO_MAIS_RECENTE) {
+for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   cat(".")
 
@@ -97,8 +120,8 @@ for (CONCURSO in PRIMEIRO_CONCURSO:CONCURSO_MAIS_RECENTE) {
 
   png.filename <- sprintf('quadros/both-%04d.png', CONCURSO)
 
-  duration <- ifelse(CONCURSO == PRIMEIRO_CONCURSO, 2, ifelse(CONCURSO == CONCURSO_MAIS_RECENTE, 4, 1/3))
-  cat("file ", png.filename, sprintf("\nduration %f\n", duration), sep="'", file=out)
+  cat("file ", png.filename, paste0("\nduration ",
+    duration[CONCURSO-CONCURSO_INICIAL+1], "\n"), sep="'", file=out)
 
   # dispositivo de renderização: arquivo PNG container da imagem resultante
   png(
@@ -106,13 +129,7 @@ for (CONCURSO in PRIMEIRO_CONCURSO:CONCURSO_MAIS_RECENTE) {
     pointsize=9, family="Roboto Condensed"
   )
 
-  minor <- MINOR; major <- MAJOR
-
-  # layout "2x1" com alturas das áreas proporcionais à amplitude das frequências
-  layout(
-    matrix(c(1, 2), nrow=2, ncol=1),
-    heights=c(major-minor, (major-minor)/ifelse(max(numeros$latencia)>9, 2, 5))
-  )
+  layout(matrix(c(1, 2), nrow=2, ncol=1), heights=c(72, 28))  # layout "2x1"
 
   # -- DIAGRAMA DAS FREQUÊNCIAS
 
@@ -134,11 +151,10 @@ for (CONCURSO in PRIMEIRO_CONCURSO:CONCURSO_MAIS_RECENTE) {
 
   title(ylab="Frequências", line=3.75)
 
-  yLab=seq.int(from=minor, to=major, by=20)
   # renderiza o eixo Y conforme limites estabelecidos
-  axis(side=2, at=yLab, col=RULE_COL)
+  axis(side=2, at=yFreq, col=RULE_COL)
   # renderiza "tick marks" extras no eixo Y
-  rug(head(yLab, -1)+10, side=2, ticksize=TICKSIZE, lwd=1, col=RULE_COL)
+  rug(rFreq, side=2, ticksize=TICKSIZE, lwd=1, col=RULE_COL)
 
   # renderiza texto e linha do valor esperado das frequências
   espera=CONCURSO*15/25
@@ -146,7 +162,7 @@ for (CONCURSO in PRIMEIRO_CONCURSO:CONCURSO_MAIS_RECENTE) {
   X2=par("usr")[2]
   text(X2, espera, "esperança", adj=ADJ, cex=TXT_CEX, font=TXT_FONT, col=REF)
   # renderiza linhas de referência ordinárias evitando sobreposição
-  abline(h=yLab[yLab > minor & abs(10*yLab-CONCURSO) > 3], col=PALE, lty="dotted")
+  abline(h=yFreq[yFreq > minor & abs(10*yFreq-CONCURSO) > 3], col=PALE, lty="dotted")
 
   # renderiza o "box & whiskers" entre o eixo Y e primeira coluna
   bp <- boxplot(
@@ -170,30 +186,24 @@ for (CONCURSO in PRIMEIRO_CONCURSO:CONCURSO_MAIS_RECENTE) {
 
   par(mar=c(2.5, 5.5, 0, 1))
 
-  major=max(3, max(numeros$latencia)) # limite superior do eixo Y
-
   bar <- barplot(
     numeros$latencia,
     names.arg=BAR_LABELS, cex.names=BAR_LABELS_CEX,
     font.axis=BAR_LABELS_FONT, col.axis=BAR_LABELS_COL,
     border=BAR_BORDER, col=BAR_COLORS, space=SPACE,
-    ylim=c(0, major+.2), yaxt='n'
+    ylim=c(0, maior+.2), yaxt='n'
   )
 
   title(ylab="Latências", line=3.5)
 
-  yLab=seq.int(from=0, to=major, by=ifelse(major>3, 2, 1))
-  axis(side=2, at=yLab, col=RULE_COL)
-  if (major>3) {
-    rug(side=2, seq.int(1, max(yLab), 2), ticksize=-.05, lwd=.85, col=RULE_COL)
-  }
+  axis(side=2, at=yLat, col=RULE_COL, labels=labLat)
 
   # renderiza texto e linha do valor esperado das latências
   espera=5/3
   abline(h=espera, col=REF, lty="dotted")
   text(X2, espera, "esperança", adj=ADJ, cex=TXT_CEX, font=TXT_FONT, col=REF)
   # renderiza linhas de referência ordinárias
-  abline(h=yLab, col=PALE, lty="dotted")
+  abline(h=yLat, col=PALE, lty="dotted")
 
   bp <- boxplot(
     numeros$latencia, frame.plot=F, axes=F, add=T, at=BOX_AT,
