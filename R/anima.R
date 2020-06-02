@@ -17,7 +17,7 @@ CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE-156+1
 query <- "SELECT bola, frequencia, latencia, (frequencia < u AND latencia >= v) AS atipico
 FROM (
   SELECT bola, count(bola) AS frequencia, ($NUMERO-max(concurso)) AS latencia, ($NUMERO*15.0/25) AS u, (25.0/15) AS v
-  FROM bolas_sorteadas where concurso <= $NUMERO
+  FROM bolas_sorteadas WHERE concurso <= $NUMERO
   GROUP BY bola
 )"
 
@@ -27,6 +27,8 @@ BAR_LABELS <- c(sprintf("%02d", 1:25))  # labels das colunas (ou barras)
 BAR_LABELS_CEX=1.375
 BAR_LABELS_FONT=2
 BAR_LABELS_COL="darkred"
+
+STD_BAR_COLORS <- rep_len(c("gold", "orange"), 25)
 
 BAR_BORDER='gray80' # cor das bordas das colunas
 SPACE=0.25          # espaçamento entre colunas
@@ -45,6 +47,8 @@ REF="purple"
 BOX_AT=-0.35            # posição do "box & whiskers"
 BOX_COL=c("mistyrose")  # cores de preenchimento dos "box & whiskers"
 
+MATRIX <- matrix(c(1, 2), nrow=2, ncol=1); HEIGHTS=c(72, 28)  # layout "2x1"
+
 # menor valor de frequência a partir do concurso inicial
 numeros <- dbGetQuery(con, query, param=list('NUMERO'=CONCURSO_INICIAL))
 minor <- (min(numeros$frequencia)%/%10)*10 # limite inferior do eixo Y
@@ -60,15 +64,13 @@ rFreq <- head(yFreq, -1)+10
 # maior valor das latências a partir do concurso inicial
 maior <- max(sapply(CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE,
 function(CONCURSO) {
-  dbGetQuery(con, 'select max(latencia) from (select $NUMERO-max(concurso) as latencia from bolas_sorteadas where concurso <= $NUMERO group by bola)', param=list('NUMERO'=CONCURSO))[1, 1]
+  dbGetQuery(con, 'SELECT MAX(latencia) FROM (SELECT $NUMERO-MAX(concurso) AS latencia FROM bolas_sorteadas WHERE concurso <= $NUMERO GROUP BY bola)', param=list('NUMERO'=CONCURSO))[1, 1]
 }))
 
-yLat <- 0:maior
-
-labLat <- sapply(yLat, function(x) { ifelse(x%%2==0, x, "") })
+labLat <- yLat <- 0:maior; labLat[yLat%%2 != 0] <- ""
 
 # exclui conteúdo produzido anteriormente
-system('rm -f video/quadros/*.png video/input.txt')
+system('rm -f video/quadros/*.png video/roteiro.txt')
 
 # CAPA – o primeiro quadro da animação
 
@@ -98,12 +100,12 @@ text(
 dev.off()
 
 # inicia o arquivo container do roteiro da animação utilizado pelo ffmpeg
-out <- file("video/input.txt", "w", encoding="UTF-8")
+out <- file("video/roteiro.txt", "w", encoding="UTF-8")
 cat("file ", png.filename, "\nduration 3\n", sep="'", file=out)
 
 # durações dos quadros da animação exceto a capa
 CONCURSO <- CONCURSO_MAIS_RECENTE-CONCURSO_INICIAL+1
-duration <- signif(rep.int(1/3, CONCURSO), digits=4)  # valor default
+duration <- rep.int(signif(1/3, digits=4), CONCURSO)  # valor default
 duration[1] <- 2; duration[CONCURSO] <- 4
 
 cat("\nProcessando")
@@ -115,7 +117,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
   numeros <- dbGetQuery(con, query, param=list('NUMERO'=CONCURSO))
 
   # cores para preenchimento "zebrado" das colunas, exceto as filtradas
-  BAR_COLORS <- rep_len(c("gold", "orange"), 25)
+  BAR_COLORS <- STD_BAR_COLORS
   BAR_COLORS[ numeros$atipico == 1 ] <- "darkorange2"
 
   png.filename <- sprintf('quadros/both-%04d.png', CONCURSO)
@@ -129,7 +131,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
     pointsize=9, family="Roboto Condensed"
   )
 
-  layout(matrix(c(1, 2), nrow=2, ncol=1), heights=c(72, 28))  # layout "2x1"
+  layout(MATRIX, heights=HEIGHTS)  # layout "2x1"
 
   # -- DIAGRAMA DAS FREQUÊNCIAS
 
