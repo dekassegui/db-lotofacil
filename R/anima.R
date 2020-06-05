@@ -37,6 +37,7 @@ RULE_COL="gray30"
 TICKSIZE=-0.0125  # comprimento de "tick marks" secundários
 
 ADJ=c(1, -0.5)  # ajuste para alinhar texto a direita e "acima"
+ZADJ=c(0, 0)
 TXT_CEX=0.9
 TXT_FONT=2
 
@@ -48,6 +49,9 @@ BOX_AT=-0.35            # posição do "box & whiskers"
 BOX_COL=c("mistyrose")  # cores de preenchimento dos "box & whiskers"
 
 MATRIX <- matrix(c(1, 2), nrow=2, ncol=1); HEIGHTS=c(72, 28)  # layout "2x1"
+
+MAR_FREQ <- c(2.5, 5.5, 1, 1)
+MAR_LAT <- c(2.5, 5.5, 0, 1)
 
 # menor valor de frequência a partir do concurso inicial
 numeros <- dbGetQuery(con, query, param=list('NUMERO'=CONCURSO_INICIAL))
@@ -61,6 +65,8 @@ yFreq <- seq.int(from=minor, to=major, by=20)
 
 rFreq <- head(yFreq, -1)+10
 
+yLIM_FREQ <- c(minor, major)
+
 # maior valor das latências a partir do concurso inicial
 maior <- max(sapply(CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE,
 function(CONCURSO) {
@@ -69,44 +75,46 @@ function(CONCURSO) {
 
 labLat <- yLat <- 0:maior; labLat[yLat%%2 != 0] <- ""
 
+yLIM_LAT <- c(0, maior+.2)
+
 # exclui conteúdo produzido anteriormente
 system('rm -f video/quadros/*.png video/roteiro.txt')
 
-# CAPA – o primeiro quadro da animação
+# CAPA - o primeiro quadro da animação
 
 png.filename <- 'quadros/capa.png'
 png(
   filename=paste0('video/', png.filename), width=800, height=600,
-  pointsize=12, family="Roboto Condensed"
+  pointsize=11, family="Roboto"
 )
-par(mar=c(.5, .5, .5, .5))
+par(mar=c(.5, .5, .5, .5), font=2)
 plot(
   NULL, type="n", axes=F, xaxs="i", yaxs="i", xlab="", ylab="",
   xlim=c(0, 8), ylim=c(0, 6)
 )
 text(
   4, 4.25, "Evolução das Frequências e Latências",
-  adj=c(.5, 0), cex=3.6, font=2, col="gray40"
+  adj=c(.5, 0), cex=3.6, col="gray40"
 )
-text(4, 3.25, "Lotofácil", adj=c(.5, .5), cex=16, font=2, col="royalblue")
+text(4, 3.25, "Lotofácil", adj=c(.5, .5), cex=16, col="royalblue")
 text(
   4, 1.7, paste("Concurso", CONCURSO_INICIAL, "a", CONCURSO_MAIS_RECENTE),
-  adj=c(.5, 0), cex=6.1, font=2, col="gray40"
+  adj=c(.5, 0), cex=6, col="gray43"
 )
 text(
   4, .5, "Concepção \u5B89\u85E4 & J.Cicogna.",
-  adj=c(.5, 0), cex=2.25, font=2.5, col="navy", family="Roboto"
+  adj=c(.5, 0), cex=2.5, col="#3333ff"
 )
 dev.off()
 
 # inicia o arquivo container do roteiro da animação utilizado pelo ffmpeg
 out <- file("video/roteiro.txt", "w", encoding="UTF-8")
-cat("file ", png.filename, "\nduration 3\n", sep="'", file=out)
+cat("file ", png.filename, "\nduration 2\n", sep="'", file=out)
 
 # durações dos quadros da animação exceto a capa
 CONCURSO <- CONCURSO_MAIS_RECENTE-CONCURSO_INICIAL+1
-duration <- rep.int(signif(1/3, digits=4), CONCURSO)  # valor default
-duration[1] <- 2; duration[CONCURSO] <- 4
+duration <- rep.int(signif(17/64, digits=4), CONCURSO)  # valor default
+duration[1] <- 1; duration[CONCURSO] <- 4
 
 cat("\nProcessando")
 
@@ -136,7 +144,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
   # -- DIAGRAMA DAS FREQUÊNCIAS
 
   par(
-    mar=c(2.5, 5.5, 1, 1), las=1,
+    mar=MAR_FREQ, las=1,
     font=2, cex.axis=1.4, font.axis=2, col.axis="#663300",  # labels do eixo Y
     cex.lab=1.625, font.lab=2, col.lab="dimgray"            # títulos laterais
   )
@@ -146,7 +154,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
     names.arg=BAR_LABELS, cex.names=BAR_LABELS_CEX,
     font.axis=BAR_LABELS_FONT, col.axis=BAR_LABELS_COL,
     border=BAR_BORDER, col=BAR_COLORS, space=SPACE,
-    ylim=c(minor, major),
+    ylim=yLIM_FREQ,
     xpd=FALSE,            # inabilita renderização fora dos limites de Y
     yaxt='n'              # inabilita renderização default do eixo Y
   )
@@ -178,22 +186,22 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
     border="transparent", density=18
   )
 
-  # renderiza o número do concurso mais recente na margem direita
+  # renderiza o número do concurso na margem direita
   text(
     X2, minor, paste("Lotofácil", CONCURSO),
-    srt=90, adj=c(0, 0), cex=2.5, font=2, col=par("col.lab")
+    srt=90, adj=ZADJ, cex=2.5, font=2, col=par("col.lab")
   )
 
   # -- DIAGRAMA DAS LATÊNCIAS
 
-  par(mar=c(2.5, 5.5, 0, 1))
+  par(mar=MAR_LAT)
 
   bar <- barplot(
     numeros$latencia,
     names.arg=BAR_LABELS, cex.names=BAR_LABELS_CEX,
     font.axis=BAR_LABELS_FONT, col.axis=BAR_LABELS_COL,
     border=BAR_BORDER, col=BAR_COLORS, space=SPACE,
-    ylim=c(0, maior+.2), yaxt='n'
+    ylim=yLIM_LAT, yaxt='n'
   )
 
   title(ylab="Latências", line=3.5)
