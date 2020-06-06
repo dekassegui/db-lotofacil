@@ -96,20 +96,20 @@ text(
   4, 4.25, "Evolução das Frequências e Latências",
   adj=c(.5, 0), cex=3.6, col="gray40"
 )
-text(4, 3.25, "Lotofácil", adj=c(.5, .5), cex=16, col="royalblue")
+text(4, 3.25, "Lotofácil", adj=c(.5, .5), cex=16, col="deepskyblue3")
 text(
   4, 1.7, paste("Concurso", CONCURSO_INICIAL, "a", CONCURSO_MAIS_RECENTE),
   adj=c(.5, 0), cex=6, col="gray43"
 )
 text(
   4, .5, "Concepção \u5B89\u85E4 & J.Cicogna.",
-  adj=c(.5, 0), cex=2.5, col="#3333ff"
+  adj=c(.5, 0), cex=2.5, col="deepskyblue4"
 )
 dev.off()
 
 # inicia o arquivo container do roteiro da animação utilizado pelo ffmpeg
 out <- file("video/roteiro.txt", "w", encoding="UTF-8")
-cat("file ", png.filename, "\nduration 2\n", sep="'", file=out)
+cat("file ", png.filename, "\nduration 3\n", sep="'", file=out)
 
 # durações dos quadros da animação exceto a capa
 CONCURSO <- CONCURSO_MAIS_RECENTE-CONCURSO_INICIAL+1
