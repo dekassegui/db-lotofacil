@@ -31,8 +31,7 @@ else
 
   # leitura da segunda declaração de arquivo – contracapa da transição –
   # ignorando declarações de quadros de transição se roteiro já processado
-  line=$( READ "^file" )
-  [[ $line =~ ^file\ .*both- ]] || line=$( READ "^file\ .*both-" )
+  line=$( READ "^file\ .*both-" )
   contra_capa=$( echo ${line#* } | tr -d "'\"" )
 
   # loop de criação dos quadros da transição

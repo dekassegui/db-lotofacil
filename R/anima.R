@@ -116,7 +116,7 @@ CONCURSO <- CONCURSO_MAIS_RECENTE-CONCURSO_INICIAL+1
 duration <- rep.int(signif(17/64, digits=4), CONCURSO)  # valor default
 duration[1] <- 1; duration[CONCURSO] <- 4
 
-cat("\nProcessando")
+cat("\nCriando quadros da animação")
 
 for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
