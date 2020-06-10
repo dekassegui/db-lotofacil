@@ -77,6 +77,12 @@ labLat <- yLat <- 0:maior; labLat[yLat%%2 != 0] <- ""
 
 yLIM_LAT <- c(0, maior+.2)
 
+ACC <- 1+dbGetQuery(con, "SELECT ganhadores_15_numeros == 0 FROM concursos
+  WHERE concurso BETWEEN $INICIAL AND $RECENTE",
+  param=list("INICIAL"=CONCURSO_INICIAL, "RECENTE"=CONCURSO_MAIS_RECENTE))[,1]
+
+ACC_COLORS <- c("gray30", "red")
+
 # exclui conteúdo produzido anteriormente
 system('rm -f video/quadros/*.png video/roteiro.txt')
 
@@ -118,6 +124,8 @@ duration[1] <- 1; duration[CONCURSO] <- 4
 
 cat("\nCriando quadros da animação")
 
+ndx <- 0
+
 for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   cat(".")
@@ -130,8 +138,9 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   png.filename <- sprintf('quadros/both-%04d.png', CONCURSO)
 
-  cat("file ", png.filename, paste0("\nduration ",
-    duration[CONCURSO-CONCURSO_INICIAL+1], "\n"), sep="'", file=out)
+  ndx <- ndx+1
+
+  cat("file ", png.filename, paste0("\nduration ", duration[ndx], "\n"), sep="'", file=out)
 
   # dispositivo de renderização: arquivo PNG container da imagem resultante
   png(
@@ -186,11 +195,10 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
     border="transparent", density=18
   )
 
-  # renderiza o número do concurso na margem direita
-  text(
-    X2, minor, paste("Lotofácil", CONCURSO),
-    srt=90, adj=ZADJ, cex=2.5, font=2, col=par("col.lab")
-  )
+  # renderiza o número do concurso na margem direita alternando a cor do texto
+  # conforme respectivo status de acumulação do prêmio principal
+  text(X2, minor, paste("Lotofácil", CONCURSO), srt=90, adj=ZADJ, cex=2.5,
+        font=2, col=ACC_COLORS[ ACC[ndx] ])
 
   # -- DIAGRAMA DAS LATÊNCIAS
 
