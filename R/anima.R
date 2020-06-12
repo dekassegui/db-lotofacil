@@ -77,9 +77,9 @@ labLat <- yLat <- 0:maior; labLat[yLat%%2 != 0] <- ""
 
 yLIM_LAT <- c(0, maior+.2)
 
-ACC <- 1+dbGetQuery(con, "SELECT ganhadores_15_numeros == 0 FROM concursos
-  WHERE concurso BETWEEN $INICIAL AND $RECENTE",
-  param=list("INICIAL"=CONCURSO_INICIAL, "RECENTE"=CONCURSO_MAIS_RECENTE))[,1]
+ACC <- dbGetQuery(con, "SELECT concurso, ganhadores_15_numeros == 0 FROM
+  concursos WHERE concurso BETWEEN $INICIAL AND $RECENTE",
+  param=list("INICIAL"=CONCURSO_INICIAL, "RECENTE"=CONCURSO_MAIS_RECENTE))
 
 ACC_COLORS <- c("gray30", "red")
 
@@ -113,18 +113,25 @@ text(
 )
 dev.off()
 
+# acessa arquivo da configuração da animação para ler as durações dos quadros
+inp <- file("video/animacao.cfg", "r", blocking=FALSE)
+durations <- readLines(inp)
+close(inp)
+extract <- function(nome){
+  as.numeric(sub(".+=", "", durations[grep(nome, durations)]))
+}
+duration.capa <- extract("capa")
+duration.first <- extract("first")
+duration.last <- extract("last")
+duration.default <- extract("default")
+rm(extract, durations, inp)
+
 # inicia o arquivo container do roteiro da animação utilizado pelo ffmpeg
 out <- file("video/roteiro.txt", "w", encoding="UTF-8")
-cat("file ", png.filename, "\nduration 3\n", sep="'", file=out)
-
-# durações dos quadros da animação exceto a capa
-CONCURSO <- CONCURSO_MAIS_RECENTE-CONCURSO_INICIAL+1
-duration <- rep.int(signif(17/64, digits=4), CONCURSO)  # valor default
-duration[1] <- 1; duration[CONCURSO] <- 4
+cat("file '", png.filename, "'\nduration ", duration.capa, "\n",
+    sep="", file=out)
 
 cat("\nCriando quadros da animação")
-
-ndx <- 0
 
 for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
@@ -138,9 +145,9 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   png.filename <- sprintf('quadros/both-%04d.png', CONCURSO)
 
-  ndx <- ndx+1
-
-  cat("file ", png.filename, paste0("\nduration ", duration[ndx], "\n"), sep="'", file=out)
+  cat("file '", png.filename, "'\nduration ", ifelse(CONCURSO>CONCURSO_INICIAL,
+    ifelse(CONCURSO<CONCURSO_MAIS_RECENTE, duration.default, duration.last),
+    duration.first), "\n", sep="", file=out)
 
   # dispositivo de renderização: arquivo PNG container da imagem resultante
   png(
@@ -198,7 +205,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
   # renderiza o número do concurso na margem direita alternando a cor do texto
   # conforme respectivo status de acumulação do prêmio principal
   text(X2, minor, paste("Lotofácil", CONCURSO), srt=90, adj=ZADJ, cex=2.5,
-        font=2, col=ACC_COLORS[ ACC[ndx] ])
+        font=2, col=ACC_COLORS[ ACC[ACC$concurso == CONCURSO, 2]+1 ])
 
   # -- DIAGRAMA DAS LATÊNCIAS
 
@@ -238,7 +245,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 }
 
 # as documented must to repeat the last one due to quirks
-cat("file ", png.filename, "\n", sep="'", file=out)
+cat("file '", png.filename, "'\n", sep="", file=out)
 close(out)
 
 cat("finalizado.\n\n")

@@ -15,6 +15,15 @@ if [[ ! $( which convert ) ]]; then
 
 else
 
+  declare -a Par  # array único das declarações ( tipo valor )
+
+  # acessa arquivo da configuração da animação somente para ler a duração dos
+  # quadros da transição
+  exec 3< video/animacao.cfg
+  while IFS="=" ReadPar && [[ ${Par[0]} != 'transition' ]]; do NOP; done
+  transition=${Par[1]}
+  exec 3<&-
+
   Print () { echo -e "${@}" >&4; }    # output to file with fd=4
 
   printf "\n> Criando quadros da transição"
@@ -22,8 +31,6 @@ else
   rm -f video/quadros/kapa*   # exclui arquivos de transição antigos
 
   exec  3< video/roteiro.txt    4> /tmp/enhanced.dat    # open files
-
-  declare -a Par  # array único das declarações ( tipo valor )
 
   # leitura e impressão da primeira declaração de arquivo – capa da transição –
   # e respectiva duração – tempo de exposição do quadro –
@@ -46,7 +53,7 @@ else
       -alpha on -compose blend -define compose:args=$opacity \
       -composite video/$fname
     # insere info de quadro de transição no roteiro
-    Print "file '$fname'\nduration 0.125"
+    Print "file '$fname'\nduration "$transition
   done
 
   # output da segunda declaração pendente e das declarações restantes
