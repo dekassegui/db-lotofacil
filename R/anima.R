@@ -2,28 +2,54 @@
 #
 # Script gerador de imagens do diagrama das frequências e latências dos números
 # sorteados em cada um dos 156 concursos mais recentes, as quais serão quadros
-# de animação via ffmpeg ou aplicativo similar.
+# de animação via ffmpeg ou aplicativo similar. Opcionalmente, é possível
+# fornecer o número do concurso inicial e o número do concurso final da
+# sequência da animação, que por default é o número do concurso mais recente.
 
 library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
 
 con <- dbConnect(SQLite(), dbname='loto.sqlite')
 
-CONCURSO_MAIS_RECENTE <- dbGetQuery(con, 'SELECT MAX(concurso) FROM concursos')[1, 1]
-
-CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE-156+1
+CONCURSO_MAIS_RECENTE <- dbGetQuery(con,
+  'SELECT MAX(concurso) FROM concursos')[1, 1]
+arguments = commandArgs(TRUE)
+if (length(arguments) == 0) {
+  CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE-156+1
+} else {
+  arguments <- as.numeric(arguments)
+  if (length(arguments) == 1) {
+    CONCURSO_INICIAL <- arguments[1]
+  } else {
+    if (arguments[1] < arguments[2]) {
+      CONCURSO_INICIAL <- arguments[1]
+      CONCURSO_MAIS_RECENTE <- min(arguments[2], CONCURSO_MAIS_RECENTE)
+    } else {
+      CONCURSO_INICIAL <- arguments[2]
+      CONCURSO_MAIS_RECENTE <- min(arguments[1], CONCURSO_MAIS_RECENTE)
+    }
+  }
+  if (CONCURSO_INICIAL < 1 || CONCURSO_INICIAL >= CONCURSO_MAIS_RECENTE) {
+    cat("\n"); stop("Parâmetro(s) inválido(s).\n\n")
+  }
+}
+rm(arguments)
 
 # requisita número da bola, suas frequências, latências mais recentes e
-# valor 0-1 indicador de suas atipicidades até o concurso $NUMERO
-query <- "SELECT bola, frequencia, latencia, (frequencia < u AND latencia >= v) AS atipico
+# valor 0-1 indicador de suas atipicidades até o concurso $CONCURSO
+query <- "SELECT bola, frequencia, latencia, (frequencia < u AND latencia >= v)
+  AS atipico
 FROM (
-  SELECT bola, count(bola) AS frequencia, ($NUMERO-max(concurso)) AS latencia, ($NUMERO*15.0/25) AS u, (25.0/15) AS v
-  FROM bolas_sorteadas WHERE concurso <= $NUMERO
+  SELECT bola, count(bola) AS frequencia, ($CONCURSO-max(concurso)) AS latencia,
+  ($CONCURSO*15.0/25) AS u, (25.0/15) AS v
+  FROM bolas_sorteadas WHERE concurso <= $CONCURSO
   GROUP BY bola
 )"
 
 # parâmetros compartilhados pelos diagramas
 
-BAR_LABELS <- c(sprintf("%02d", 1:25))  # labels das colunas (ou barras)
+bolas <- 1:25
+
+BAR_LABELS <- c(sprintf("%02d", bolas))  # labels das colunas (ou barras)
 BAR_LABELS_CEX=1.375
 BAR_LABELS_FONT=2
 BAR_LABELS_COL="darkred"
@@ -53,24 +79,38 @@ MATRIX <- matrix(c(1, 2), nrow=2, ncol=1); HEIGHTS=c(72, 28)  # layout "2x1"
 MAR_FREQ <- c(2.5, 5.5, 1, 1)
 MAR_LAT <- c(2.5, 5.5, 0, 1)
 
-# menor valor de frequência a partir do concurso inicial
-numeros <- dbGetQuery(con, query, param=list('NUMERO'=CONCURSO_INICIAL))
+completa <- function (CONCURSO) {
+  ausentes <- which( ! bolas %in% numeros$bola )
+  if (length(ausentes) > 0) {
+    for (bola in ausentes) numeros <- rbind(numeros, c(bola, 0, CONCURSO, 0))
+    numeros <<- numeros[order(numeros$bola),]
+  }
+}
+
+# menor valor de frequência no intervalo
+numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO_INICIAL))
+if (CONCURSO_INICIAL < 7) completa(CONCURSO_INICIAL)
 minor <- (min(numeros$frequencia)%/%10)*10 # limite inferior do eixo Y
 
-# maior valor de frequência a partir do concurso inicial
-numeros <- dbGetQuery(con, query, param=list('NUMERO'=CONCURSO_MAIS_RECENTE))
+# maior valor de frequência no intervalo
+numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO_MAIS_RECENTE))
+if (CONCURSO_MAIS_RECENTE < 7) completa(CONCURSO_MAIS_RECENTE)
 major <- (max(numeros$frequencia)%/%10+1)*10 # limite superior do eixo Y
 
-yFreq <- seq.int(from=minor, to=major, by=20)
+inc <- ifelse((major-minor)<=40, 2, ifelse((major-minor)<=100, 10, 20))
+yFreq <- seq.int(from=minor, to=major, by=inc)
 
-rFreq <- head(yFreq, -1)+10
+inc <- ifelse((major-minor)<=40, 1, ifelse((major-minor)<=100, 5, 10))
+rFreq <- head(yFreq, -1)+inc
 
 yLIM_FREQ <- c(minor, major)
 
 # maior valor das latências a partir do concurso inicial
 maior <- max(sapply(CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE,
-function(CONCURSO) {
-  dbGetQuery(con, 'SELECT MAX(latencia) FROM (SELECT $NUMERO-MAX(concurso) AS latencia FROM bolas_sorteadas WHERE concurso <= $NUMERO GROUP BY bola)', param=list('NUMERO'=CONCURSO))[1, 1]
+function (CONCURSO) {
+  dbGetQuery(con, 'SELECT MAX(latencia) FROM (SELECT $NUMERO-MAX(concurso) AS
+  latencia FROM bolas_sorteadas WHERE concurso <= $NUMERO GROUP BY bola)',
+  param=list('NUMERO'=CONCURSO))[1, 1]
 }))
 
 labLat <- yLat <- 0:maior; labLat[yLat%%2 != 0] <- ""
@@ -104,8 +144,8 @@ text(
 )
 text(4, 3.25, "Lotofácil", adj=c(.5, .5), cex=16, col="deepskyblue3")
 text(
-  4, 1.7, paste("Concurso", CONCURSO_INICIAL, "a", CONCURSO_MAIS_RECENTE),
-  adj=c(.5, 0), cex=6, col="gray43"
+  4, 1.7, sprintf("Concurso %04d a %04d", CONCURSO_INICIAL,
+    CONCURSO_MAIS_RECENTE), adj=c(.5, 0), cex=6, col="gray43"
 )
 text(
   4, .5, "Concepção \u5B89\u85E4 & J.Cicogna.",
@@ -137,7 +177,8 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   cat(".")
 
-  numeros <- dbGetQuery(con, query, param=list('NUMERO'=CONCURSO))
+  numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO))
+  if (CONCURSO < 7) { completa(CONCURSO) }
 
   # cores para preenchimento "zebrado" das colunas, exceto as filtradas
   BAR_COLORS <- STD_BAR_COLORS
@@ -204,8 +245,8 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   # renderiza o número do concurso na margem direita alternando a cor do texto
   # conforme respectivo status de acumulação do prêmio principal
-  text(X2, minor, paste("Lotofácil", CONCURSO), srt=90, adj=ZADJ, cex=2.5,
-        font=2, col=ACC_COLORS[ ACC[ACC$concurso == CONCURSO, 2]+1 ])
+  text(X2, minor, sprintf("Lotofácil %04d", CONCURSO), srt=90, adj=ZADJ,
+        cex=2.5, font=2, col=ACC_COLORS[ ACC[ACC$concurso == CONCURSO, 2]+1 ])
 
   # -- DIAGRAMA DAS LATÊNCIAS
 
