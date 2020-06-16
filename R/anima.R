@@ -2,17 +2,19 @@
 #
 # Script gerador de imagens do diagrama das frequências e latências dos números
 # sorteados em cada um dos 156 concursos mais recentes, as quais serão quadros
-# de animação via ffmpeg ou aplicativo similar. Opcionalmente, é possível
-# fornecer o número do concurso inicial e o número do concurso final da
-# sequência da animação, que por default é o número do concurso mais recente.
+# de animação via "ffmpeg" ou aplicativo similar. Opcionalmente, é possível
+# fornecer o número serial do concurso inicial e o número serial do concurso
+# final da sequência da animação, que por default é o número serial do concurso
+# mais recente – se não fornecido – e a ordem dos parâmetros não importa.
 
 library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
 
 con <- dbConnect(SQLite(), dbname='loto.sqlite')
 
 CONCURSO_MAIS_RECENTE <- dbGetQuery(con,
-  'SELECT MAX(concurso) FROM concursos')[1, 1]
-arguments = commandArgs(TRUE)
+  'SELECT concurso FROM concursos ORDER BY concurso DESC LIMIT 1')[1, 1]
+
+arguments <- commandArgs(TRUE)
 if (length(arguments) == 0) {
   CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE-156+1
 } else {
@@ -45,11 +47,11 @@ FROM (
   GROUP BY bola
 )"
 
+bolas <- 1:25   # sequência de numeração das bolas
+
 # parâmetros compartilhados pelos diagramas
 
-bolas <- 1:25
-
-BAR_LABELS <- c(sprintf("%02d", bolas))  # labels das colunas (ou barras)
+BAR_LABELS <- sprintf("%02d", bolas)    # labels das colunas
 BAR_LABELS_CEX=1.375
 BAR_LABELS_FONT=2
 BAR_LABELS_COL="darkred"
@@ -79,31 +81,37 @@ MATRIX <- matrix(c(1, 2), nrow=2, ncol=1); HEIGHTS=c(72, 28)  # layout "2x1"
 MAR_FREQ <- c(2.5, 5.5, 1, 1)
 MAR_LAT <- c(2.5, 5.5, 0, 1)
 
+# completa o data frame com frequências, latências e atipicidades das bolas
+# não sorteadas se CONCURSO < 7 – que é o número serial do concurso em que
+# todas as bolas finalmente foram sorteadas –
 completa <- function (CONCURSO) {
   ausentes <- which( ! bolas %in% numeros$bola )
-  if (length(ausentes) > 0) {
+  # if (length(ausentes) > 0) { # <-- teste denecessário :: fato histórico
     for (bola in ausentes) numeros <- rbind(numeros, c(bola, 0, CONCURSO, 0))
     numeros <<- numeros[order(numeros$bola),]
-  }
+  # }
 }
 
 # menor valor de frequência no intervalo
 numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO_INICIAL))
-if (CONCURSO_INICIAL < 7) completa(CONCURSO_INICIAL)
+if (CONCURSO_INICIAL < 7) { completa(CONCURSO_INICIAL) }
 minor <- (min(numeros$frequencia)%/%10)*10 # limite inferior do eixo Y
 
 # maior valor de frequência no intervalo
 numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO_MAIS_RECENTE))
-if (CONCURSO_MAIS_RECENTE < 7) completa(CONCURSO_MAIS_RECENTE)
+if (CONCURSO_MAIS_RECENTE < 7) { completa(CONCURSO_MAIS_RECENTE) }
 major <- (max(numeros$frequencia)%/%10+1)*10 # limite superior do eixo Y
 
-inc <- ifelse((major-minor)<=40, 2, ifelse((major-minor)<=100, 10, 20))
+rango <- major-minor
+inc <- ifelse(rango<41, 2, ifelse(rango<101, 10, ifelse(rango<201, 20, 100)))
 yFreq <- seq.int(from=minor, to=major, by=inc)
 
-inc <- ifelse((major-minor)<=40, 1, ifelse((major-minor)<=100, 5, 10))
+inc <- ifelse(rango<41, 1, ifelse(rango<101, 5, ifelse(rango<201, 10, 50)))
 rFreq <- head(yFreq, -1)+inc
 
 yLIM_FREQ <- c(minor, major)
+
+rm(rango, inc)
 
 # maior valor das latências a partir do concurso inicial
 maior <- max(sapply(CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE,

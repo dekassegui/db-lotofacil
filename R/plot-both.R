@@ -19,7 +19,7 @@ CONCURSO <- numeros[1, c('concurso')]
 
 # parâmetros compartilhados pelos diagramas
 
-BAR_LABELS <- c(sprintf("%02d", 1:25))  # labels das colunas (ou barras)
+BAR_LABELS <- sprintf("%02d", 1:25)   # labels das colunas (ou barras)
 BAR_LABELS_CEX=1.375
 BAR_LABELS_FONT=2
 BAR_LABELS_COL="darkred"
