@@ -176,8 +176,6 @@ rm(extract, durations, inp)
 
 # inicia o arquivo container do roteiro da animação utilizado pelo ffmpeg
 out <- file("video/roteiro.txt", "w", encoding="UTF-8")
-cat("file '", png.filename, "'\nduration ", duration.capa, "\n",
-    sep="", file=out)
 
 cat("\nCriando quadros da animação")
 
