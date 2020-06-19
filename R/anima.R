@@ -102,16 +102,12 @@ numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO_MAIS_RECENTE))
 if (CONCURSO_MAIS_RECENTE < 7) { completa(CONCURSO_MAIS_RECENTE) }
 major <- (max(numeros$frequencia)%/%10+1)*10 # limite superior do eixo Y
 
-rango <- major-minor
-inc <- ifelse(rango<41, 2, ifelse(rango<101, 10, ifelse(rango<201, 20, 100)))
-yFreq <- seq.int(from=minor, to=major, by=inc)
-
-inc <- ifelse(rango<41, 1, ifelse(rango<101, 5, ifelse(rango<201, 10, 50)))
-rFreq <- head(yFreq, -1)+inc
-
 yLIM_FREQ <- c(minor, major)
 
-rm(rango, inc)
+# configura escala das frequências com 10 marcas :: provisório
+increment <- (major-minor)%/%10
+yFreq <- seq.int(from=minor, to=major, by=increment)
+rFreq <- head(yFreq, -1)+increment/2
 
 # maior valor das latências a partir do concurso inicial
 maior <- max(sapply(CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE,
@@ -168,7 +164,6 @@ close(inp)
 extract <- function(nome){
   as.numeric(sub(".+=", "", durations[grep(nome, durations)]))
 }
-duration.capa <- extract("capa")
 duration.first <- extract("first")
 duration.last <- extract("last")
 duration.default <- extract("default")
