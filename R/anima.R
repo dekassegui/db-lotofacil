@@ -170,7 +170,7 @@ duration.default <- extract("default")
 rm(extract, durations, inp)
 
 # inicia o arquivo container do roteiro da animação utilizado pelo ffmpeg
-out <- file("video/roteiro.txt", "w", encoding="UTF-8")
+roteiro <- file("video/roteiro.txt", "w", encoding="UTF-8")
 
 cat("\nCriando quadros da animação")
 
@@ -189,7 +189,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   cat("file '", png.filename, "'\nduration ", ifelse(CONCURSO>CONCURSO_INICIAL,
     ifelse(CONCURSO<CONCURSO_MAIS_RECENTE, duration.default, duration.last),
-    duration.first), "\n", sep="", file=out)
+    duration.first), "\n", sep="", file=roteiro)
 
   # dispositivo de renderização: arquivo PNG container da imagem resultante
   png(
@@ -287,8 +287,8 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 }
 
 # as documented must to repeat the last one due to quirks
-cat("file '", png.filename, "'\n", sep="", file=out)
-close(out)
+cat("file '", png.filename, "'\n", sep="", file=roteiro)
+close(roteiro)
 
 cat("finalizado.\n\n")
 
