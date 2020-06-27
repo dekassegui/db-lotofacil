@@ -1,12 +1,25 @@
 #!/usr/bin/Rscript --no-init-file
 #
 # Script gerador de imagens do diagrama das frequências e latências dos números
-# sorteados em cada um dos 156 concursos mais recentes, as quais serão quadros
-# de animação via "ffmpeg" ou aplicativo similar. Opcionalmente, é possível
-# fornecer o número serial do concurso inicial e o número serial do concurso
-# final da sequência da animação, que por default é o número serial do concurso
-# mais recente – se não fornecido – e a ordem dos parâmetros não importa.
-
+# sorteados nos concursos, as quais serão quadros de animação via "ffmpeg" e da
+# sequência dos quadros com respectivas durações – roteiro da animação –
+# conforme configuração arbitrária, assim executado:
+#
+#   prompt> R/anima.R [concurso_inicial [concurso_final]]
+#
+# tal que; se ambos os parâmetros forem fornecidos – a ordem de declaração não
+# importa – então os que forem iguais a "0" assumirão valor "1" e se o concurso
+# final for maior que o número do concurso mais recente, então o assume, senão,
+# em caso de único parâmetro fornecido e positivo, então este parâmetro será o
+# número do concurso inicial e o concurso_final assumirá o valor default – o
+# número do concurso mais recente – e se este único parâmetro for negativo,
+# então o valor absoluto do parâmetro é o número de concursos mais recentes que
+# comporão a sequência e finalmente, se nenhum parâmetro fornecido então os 156
+# – máximo número de concursos num ano = 52 semanas × 3 concursos por semana –
+# concursos mais recentes comporão a sequência.
+#
+# Importante: O procedimento é oneroso, principalmente em tempo de execução!
+#
 library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
 
 con <- dbConnect(SQLite(), dbname='loto.sqlite')
@@ -18,20 +31,16 @@ arguments <- commandArgs(TRUE)
 if (length(arguments) == 0) {
   CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE-156+1
 } else {
-  arguments <- as.numeric(arguments)
+  arguments <- sort(as.numeric(arguments))
   if (length(arguments) == 1) {
-    CONCURSO_INICIAL <- arguments[1]
-  } else {
-    if (arguments[1] < arguments[2]) {
-      CONCURSO_INICIAL <- arguments[1]
-      CONCURSO_MAIS_RECENTE <- min(arguments[2], CONCURSO_MAIS_RECENTE)
+    if (arguments[1] < 0) {
+      CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE+arguments[1]+1
     } else {
-      CONCURSO_INICIAL <- arguments[2]
-      CONCURSO_MAIS_RECENTE <- min(arguments[1], CONCURSO_MAIS_RECENTE)
+      CONCURSO_INICIAL <- max(arguments[1], 1)
     }
-  }
-  if (CONCURSO_INICIAL < 1 || CONCURSO_INICIAL >= CONCURSO_MAIS_RECENTE) {
-    cat("\n"); stop("Parâmetro(s) inválido(s).\n\n")
+  } else {
+    CONCURSO_INICIAL <- max(arguments[1], 1)
+    CONCURSO_MAIS_RECENTE <- min(max(arguments[2], 1), CONCURSO_MAIS_RECENTE)
   }
 }
 rm(arguments)
