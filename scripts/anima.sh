@@ -16,8 +16,8 @@ media_duration() {
 }
 
 # avaliação aritmética – floating point – da expressão explícita no argumento
-eval() {
-  echo "$*" | bc -l
+evaluate() {
+  echo "scale=5; $*" | bc -l
 }
 
 # prepara parâmetros para montagem da introdução com as declarações do
@@ -47,12 +47,15 @@ common="-c:v $codec -profile:v baseline -preset $speed -tune $tune -crf $quality
 # cria a introdução da animação com a capa e primeiro quadro da animação
 ln -s $PWD/video/quadros/capa.png /tmp/img00.png
 ln -s $PWD/video/$first /tmp/img01.png
-A=$duration                # duração em segundos de cada quadro da introdução
-B=$( eval "2*$duration" )  # duração em segundos do FX tipo "crossfade"
-X=$( eval "($A+$B)/$B" )
-FPS=$( eval "1/$B" )
+A=$( evaluate "$duration/3" ) # duração em segundos de cada quadro da introdução
+                              # sem FX – reduzida para evitar exposição excessiva
+B=$( evaluate "2*$duration" ) # duração em segundos do FX tipo "crossfade"
+X=$( evaluate "($A+$B)/$B" )  # número de quadros para cada imagem do FX
+FPS=$( evaluate "1/$B" )      # output frame rate
 intro=video/intro.mp4
-ffmpeg -i /tmp/img%02d.png -vf "zoompan=d=$X:s=svga:fps=$FPS, framerate=25:interp_start=0:interp_end=255:scene=100" $common -maxrate 5M -q:v 2 -y $intro
+filtros="zoompan=d=$X:s=svga:fps=$FPS, framerate=25:interp_start=0:interp_end=255:scene=100"
+echo -e "\n$filtro\n"
+ffmpeg -i /tmp/img%02d.png -vf "$filtros" $common -maxrate 5M -q:v 2 -y $intro
 rm -f /tmp/img*.png
 
 # cria animação tipo "slideshow" conforme roteiro
@@ -71,18 +74,22 @@ ffmpeg -f concat -safe 0 -i $comboFiles -c copy -y $combo
 
 # agrega áudio de introdução
 prefixo=video/audio/intro.wav
-inputs="-i $combo -itsoffset 0 -i $prefixo"
-filtros="extrastereo=m=2"
+inputs="-i $combo -i $prefixo"
 # agrega áudio de encerramento se possível
 sufixo=video/audio/last.wav
 tc=$( media_duration $combo )
 ts=$( media_duration $sufixo )
-if [[ $( eval "$tc >= ($ts+1)" ) == 1 ]]; then
-  # prefixa com '0' evitando erro de argumento do 'itsoffset' quando 'eval'
-  # retorna número entre 0 e 1, formatado sem o '0' que precede o separador
-  # da parte fracionária – usualmente '.'
-  at='0'$( eval "$tc-$ts-1" )
+if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
+  # prefixa com "0" evitando erro de argumento do "itsoffset" quando "evaluate"
+  # retorna número entre 0 e 1 formatado sem o "0" que precede o separador
+  # da parte fracionária – usualmente "."
+  at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
   inputs="$inputs -itsoffset $at -i $sufixo"
-  filtros="amix=inputs=2, "$filtros
+  kind=-filter_complex
+  filters="[2:a]flanger=width=42, acontrast=50[FIM]; [1:a][FIM]amix=inputs=2, extrastereo=m=2"
+  sync="-async 1"
+else
+  kind=-af
+  filters="extrastereo=m=2"
 fi
-ffmpeg $inputs -c:v copy -c:a aac -b:a 64k -filter_complex "$filtros" -async 1 -y video/loto.mp4
+ffmpeg $inputs $kind "$filters" $sync -c:v copy -c:a aac -b:a 64k -y video/loto.mp4
