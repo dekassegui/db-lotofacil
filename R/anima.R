@@ -181,6 +181,9 @@ rm(extract, durations, inp)
 # inicia o arquivo container do roteiro da animação utilizado pelo ffmpeg
 roteiro <- file("video/roteiro.txt", "w", encoding="UTF-8")
 
+# inicia o arquivo dos números seriais de concursos com premiação acumulada
+acc <- file("video/acc.dat", "w", encoding="UTF-8")
+
 cat("\nCriando quadros da animação")
 
 for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
@@ -258,6 +261,8 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
   text(X2, minor, sprintf("Lotofácil %04d", CONCURSO), srt=90, adj=ZADJ,
         cex=2.5, font=2, col=ACC_COLORS[ ACC[ACC$concurso == CONCURSO, 2]+1 ])
 
+  if (ACC[ACC$concurso == CONCURSO, 2]) cat(CONCURSO, "\n", file=acc)
+
   # -- DIAGRAMA DAS LATÊNCIAS
 
   par(mar=MAR_LAT)
@@ -298,6 +303,8 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 # as documented must to repeat the last one due to quirks
 cat("file '", png.filename, "'\n", sep="", file=roteiro)
 close(roteiro)
+
+close(acc)
 
 cat("finalizado.\n\n")
 

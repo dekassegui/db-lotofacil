@@ -86,10 +86,52 @@ if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
   at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
   inputs="$inputs -itsoffset $at -i $sufixo"
   kind=-filter_complex
-  filters="[2:a]flanger=width=42, acontrast=50[FIM]; [1:a][FIM]amix=inputs=2, extrastereo=m=2"
+  filters="[2:a]flanger=width=42, acontrast=50[FIM]; [1:a][FIM]amix=inputs=2,"
   sync="-async 1"
 else
   kind=-af
-  filters="extrastereo=m=2"
 fi
-ffmpeg $inputs $kind "$filters" $sync -c:v copy -c:a aac -b:a 64k -y video/loto.mp4
+common="-c:v copy -c:a aac -b:a 64k"
+final="video/loto.mp4"
+ffmpeg $inputs $kind "$filters extrastereo=m=2" $sync $common -y $final
+
+# reaproveita a animação final agregando SFX aos quadros correspondentes aos
+# concursos cumulativos – da premiação principal – cujos números seriais são
+# lidos de arquivo gerado pelo script contraparte – R/anima.R –
+
+enhanced="video/best.mp4"
+[[ -e $enhanced ]] && rm -f $enhanced   # remove animação desconhecida
+
+# leitura dos números seriais dos concursos cumulativos
+exec 3< video/acc.dat
+read -u 3 -d "\n" -a acc
+exec 3<&-
+m=${#acc[*]}  # quantidade de concursos cumulativos
+
+(( m == 0 )) && exit 0  # termina execução se não ocorreram concursos cumulativos
+
+# leitura do valor default da duração de cada quadro da animação
+exec 3< video/animacao.cfg
+while IFS= read -u 3 -r line; do [[ $line =~ ^default ]] && break; done
+exec 3<&-
+duration=${line#*=}
+
+base=${first//[^0-9]/}            # número serial do concurso inicial
+start=$( media_duration $intro )  # duração da introdução
+SFX=video/audio/click.wav         # áudio de curta duração
+
+# prepara os parâmetros para agregação de SFX
+inputs="-i $final"
+filters="[0:a]volume=4[a0];"
+labels="[a0]"
+for (( k=0, j=1; k<m; k++, j++ )); do
+  at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
+  inputs="$inputs -itsoffset $at -i $SFX"
+  filters="${filters}[$j:a]volume=5[a$j];"
+  labels="${labels}[a$j]"
+done
+filters="${filters} ${labels}amix=inputs="$(( m+1 ))
+
+ffmpeg $inputs -filter_complex "$filters" -async 1 $common -y $enhanced
+
+echo -e "\n> Animação melhorada com SFX está disponível.\n"
