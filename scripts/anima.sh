@@ -54,12 +54,13 @@ X=$( evaluate "($A+$B)/$B" )  # número de quadros para cada imagem do FX
 FPS=$( evaluate "1/$B" )      # output frame rate
 intro=video/intro.mp4
 filtros="zoompan=d=$X:s=svga:fps=$FPS, framerate=25:interp_start=0:interp_end=255:scene=100"
-echo -e "\n$filtro\n"
+
 ffmpeg -i /tmp/img%02d.png -vf "$filtros" $common -maxrate 5M -q:v 2 -y $intro
 rm -f /tmp/img*.png
 
 # cria animação tipo "slideshow" conforme roteiro
 content=video/fun.mp4
+
 ffmpeg -f concat -i $roteiro -vf 'scale=800:600' $common -y $content
 
 # combina introdução e animação
@@ -67,6 +68,7 @@ comboFiles=video/combo.dat
 [[ -e $comboFiles ]] && rm -f $comboFiles
 echo -e "file '${intro##*/}'\nfile '${content##*/}'" > $comboFiles
 combo=video/combo.mp4
+
 ffmpeg -f concat -safe 0 -i $comboFiles -c copy -y $combo
 
 # agrega áudio à combinação – obrigatoriamente é o último passo do algoritmo
@@ -93,6 +95,7 @@ else
 fi
 common="-c:v copy -c:a aac -b:a 64k"
 final="video/loto.mp4"
+
 ffmpeg $inputs $kind "$filters extrastereo=m=2" $sync $common -y $final
 
 # reaproveita a animação final agregando SFX aos quadros correspondentes aos
