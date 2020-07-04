@@ -50,7 +50,7 @@ common="-c:v $codec -profile:v baseline -preset $speed -tune $tune -crf $quality
 
 # cria a introdução da animação com a capa e primeiro quadro da animação
 intro=video/intro.mp4
-[[ -e /tmp/img[01].png ]] && rm -f /tmp/img[01].png
+rm -f /tmp/img*.png
 ln -s $PWD/video/quadros/capa.png /tmp/img00.png
 ln -s $PWD/video/$first /tmp/img01.png
 A=$( evaluate "$duration/3" ) # duração em segundos de cada quadro da introdução
@@ -61,8 +61,6 @@ FPS=$( evaluate "1/$B" )      # output frame rate
 filters="zoompan=d=$X:s=svga:fps=$FPS, framerate=25:interp_start=0:interp_end=255:scene=100"
 
 ffmpeg -i /tmp/img%02d.png -vf "$filters" $common -maxrate 5M -q:v 2 -y $intro
-
-rm -f /tmp/img[01].png
 
 # cria animação tipo "slideshow" conforme roteiro
 content=video/fun.mp4
@@ -82,6 +80,7 @@ ffmpeg -f concat -safe 0 -i $comboFiles -c copy -y $combo
 # números seriais são lidos de arquivo gerado pelo script contraparte R/anima.R –
 
 final=video/loto.mp4            # arquivo da animação resultante
+
 prefixo=video/audio/intro.wav   # áudio de introdução
 sufixo=video/audio/last.wav     # áudio de encerramento
 sfx=video/audio/click.wav       # áudio SFX de curta duração
