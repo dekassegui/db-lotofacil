@@ -1,16 +1,20 @@
 #!/bin/bash
 
-# Montagem da animação do tipo slideshow via FFmpeg usando as imagens – quadros
+# Montagem da animação do tipo 'slideshow' via FFmpeg usando imagens – quadros
 # – e sequência de apresentação – roteiro da animação – geradas pelo script
-# contraparte – R/anima.R – conforme configuração arbitrária.
+# contraparte – R/anima.R – conforme configuração arbitrária, agregando áudio –
+# não intrusivo no desempenho da animação – associado a quadros correspondentes
+# a concursos sem apostas ganhadoras do prêmio principal, além da introdução e
+# do encerramento da animação.
 
-# checa pré-requisito – dependência única do subprojeto
-if [[ ! $( which ffmpeg ) ]]; then
-  echo -e "\nErro: Pacote \"ffmpeg\" não está disponível.\n"
+# checa dependências do subprojeto
+for command in ffmpeg ffprobe; do
+  [[ $( which $command ) ]] && continue
+  echo -e "\nErro: Pacote \"${command}\" não está disponível.\n"
   exit 0
-fi
+done
 
-# retorna a duração da 'media' em segundos – floating point value
+# retorna a duração da mídia em segundos – floating point value
 media_duration() {
   ffprobe -i "$*" -show_entries format=duration -v quiet -of csv="p=0"
 }
@@ -27,7 +31,7 @@ while IFS= read -u 3 -r line; do [[ $line =~ ^file ]] && break; done
 first=$( echo ${line#* } | tr -d "'\"" )
 while IFS= read -u 3 -r line; do [[ $line =~ ^duration ]] && break; done
 duration=${line#* }
-# armazena demais declarações para montagem da animação, evitando exibição
+# preserva demais declarações para montagem da animação, evitando exibição
 # redundante do primeiro quadro
 roteiro=video/roteiro.dat
 exec 4> $roteiro
@@ -45,6 +49,8 @@ pix=yuv420p       # adequado para iOS
 common="-c:v $codec -profile:v baseline -preset $speed -tune $tune -crf $quality -pix_fmt $pix"
 
 # cria a introdução da animação com a capa e primeiro quadro da animação
+intro=video/intro.mp4
+[[ -e /tmp/img[01].png ]] && rm -f /tmp/img[01].png
 ln -s $PWD/video/quadros/capa.png /tmp/img00.png
 ln -s $PWD/video/$first /tmp/img01.png
 A=$( evaluate "$duration/3" ) # duração em segundos de cada quadro da introdução
@@ -52,11 +58,11 @@ A=$( evaluate "$duration/3" ) # duração em segundos de cada quadro da introdu�
 B=$( evaluate "2*$duration" ) # duração em segundos do FX tipo "crossfade"
 X=$( evaluate "($A+$B)/$B" )  # número de quadros para cada imagem do FX
 FPS=$( evaluate "1/$B" )      # output frame rate
-intro=video/intro.mp4
-filtros="zoompan=d=$X:s=svga:fps=$FPS, framerate=25:interp_start=0:interp_end=255:scene=100"
+filters="zoompan=d=$X:s=svga:fps=$FPS, framerate=25:interp_start=0:interp_end=255:scene=100"
 
-ffmpeg -i /tmp/img%02d.png -vf "$filtros" $common -maxrate 5M -q:v 2 -y $intro
-rm -f /tmp/img*.png
+ffmpeg -i /tmp/img%02d.png -vf "$filters" $common -maxrate 5M -q:v 2 -y $intro
+
+rm -f /tmp/img[01].png
 
 # cria animação tipo "slideshow" conforme roteiro
 content=video/fun.mp4
@@ -64,21 +70,29 @@ content=video/fun.mp4
 ffmpeg -f concat -i $roteiro -vf 'scale=800:600' $common -y $content
 
 # combina introdução e animação
+combo=video/combo.mp4
 comboFiles=video/combo.dat
 [[ -e $comboFiles ]] && rm -f $comboFiles
 echo -e "file '${intro##*/}'\nfile '${content##*/}'" > $comboFiles
-combo=video/combo.mp4
 
 ffmpeg -f concat -safe 0 -i $comboFiles -c copy -y $combo
 
-# agrega áudio à combinação – obrigatoriamente é o último passo do algoritmo
-# para que não sejam intrusivos entre os objetos previamente combinados
+# agrega áudio à combinação recém gerada, associando SFX aos quadros da animação
+# correspondentes a concursos sem apostas ganhadoras do prêmio principal – cujos
+# números seriais são lidos de arquivo gerado pelo script contraparte R/anima.R –
 
-# agrega áudio de introdução
-prefixo=video/audio/intro.wav
-inputs="-i $combo -i $prefixo"
-# agrega áudio de encerramento se possível
-sufixo=video/audio/last.wav
+final=video/loto.mp4            # arquivo da animação resultante
+prefixo=video/audio/intro.wav   # áudio de introdução
+sufixo=video/audio/last.wav     # áudio de encerramento
+sfx=video/audio/click.wav       # áudio SFX de curta duração
+
+(( volume=3 ))  # volume básico do áudio
+
+inputs=( -i $combo -i $prefixo )
+filters=( "[1:a]volume=${volume}[a1];" )
+labels=( "[a1]" )
+
+# agrega o áudio de encerramento se possível
 tc=$( media_duration $combo )
 ts=$( media_duration $sufixo )
 if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
@@ -86,24 +100,10 @@ if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
   # retorna número entre 0 e 1 formatado sem o "0" que precede o separador
   # da parte fracionária – usualmente "."
   at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
-  inputs="$inputs -itsoffset $at -i $sufixo"
-  kind=-filter_complex
-  filters="[2:a]flanger=width=42, acontrast=50[FIM]; [1:a][FIM]amix=inputs=2,"
-  sync="-async 1"
-else
-  kind=-af
+  inputs=( ${inputs[*]} -itsoffset $at -i $sufixo )
+  filters=( ${filters[*]} "[2:a]flanger=width=35, volume=${volume}[a2];" )
+  labels=( ${labels[*]} "[a2]" )
 fi
-common="-c:v copy -c:a aac -b:a 64k"
-final="video/loto.mp4"
-
-ffmpeg $inputs $kind "$filters extrastereo=m=2" $sync $common -y $final
-
-# reaproveita a animação final agregando SFX aos quadros correspondentes aos
-# concursos cumulativos – da premiação principal – cujos números seriais são
-# lidos de arquivo gerado pelo script contraparte – R/anima.R –
-
-enhanced="video/best.mp4"
-[[ -e $enhanced ]] && rm -f $enhanced   # remove animação desconhecida
 
 # leitura dos números seriais dos concursos cumulativos
 exec 3< video/acc.dat
@@ -111,30 +111,28 @@ read -u 3 -d "\n" -a acc
 exec 3<&-
 m=${#acc[*]}  # quantidade de concursos cumulativos
 
-(( m == 0 )) && exit 0  # termina execução se não ocorreram concursos cumulativos
+if (( m > 0 )); then
 
-# leitura do valor default da duração de cada quadro da animação
-exec 3< video/animacao.cfg
-while IFS= read -u 3 -r line; do [[ $line =~ ^default ]] && break; done
-exec 3<&-
-duration=${line#*=}
+  # leitura do valor default da duração de cada quadro da animação
+  exec 3< video/animacao.cfg
+  while IFS= read -u 3 -r line; do [[ $line =~ ^default ]] && break; done
+  exec 3<&-
+  duration=${line#*=}   # duração de cada quadro da animação
 
-base=${first//[^0-9]/}            # número serial do concurso inicial
-start=$( media_duration $intro )  # duração da introdução
-SFX=video/audio/click.wav         # áudio de curta duração
+  base=${first//[^0-9]/}            # número serial do concurso inicial
+  start=$( media_duration $intro )  # duração da introdução
 
-# prepara os parâmetros para agregação de SFX
-inputs="-i $final"
-filters="[0:a]volume=4[a0];"
-labels="[a0]"
-for (( k=0, j=1; k<m; k++, j++ )); do
-  at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
-  inputs="$inputs -itsoffset $at -i $SFX"
-  filters="${filters}[$j:a]volume=5[a$j];"
-  labels="${labels}[a$j]"
-done
-filters="${filters} ${labels}amix=inputs="$(( m+1 ))
+  # prepara parâmetros associando SFX aos concursos cumulativos
+  for (( k=0, j=${#labels[*]}+1, volume++; k<m; k++, j++ )); do
+    at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
+    inputs=( ${inputs[*]} -itsoffset $at -i $sfx )
+    filters=( ${filters[*]} "[$j:a]volume=${volume}[a$j];" )
+    labels=( ${labels[*]} "[a$j]" )
+  done
 
-ffmpeg $inputs -filter_complex "$filters" -async 1 $common -y $enhanced
+fi
 
-echo -e "\n> Animação melhorada com SFX está disponível.\n"
+# combinação dos filtros individuais --> estéreo ampliado
+filters="${filters[*]} ${labels[*]}amix=inputs=${#labels[*]}, extrastereo=m=2"
+
+ffmpeg ${inputs[*]} -filter_complex "$filters" -async 1 -c:v copy -c:a aac -b:a 64k -y $final
