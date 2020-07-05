@@ -85,24 +85,12 @@ prefixo=video/audio/intro.wav   # áudio de introdução
 sufixo=video/audio/last.wav     # áudio de encerramento
 sfx=video/audio/click.wav       # áudio SFX de curta duração
 
-(( volume=3 ))  # volume básico do áudio
+ratio='4.0'  # razão entre volumes de saída e entrada
 
 inputs=( -i $combo -i $prefixo )
-filters=( "[1:a]volume=${volume}[a1];" )
+filters=( "[1:a]volume=${ratio}[a1];" )
 labels=( "[a1]" )
-
-# agrega o áudio de encerramento se possível
-tc=$( media_duration $combo )
-ts=$( media_duration $sufixo )
-if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
-  # prefixa com "0" evitando erro de argumento do "itsoffset" quando "evaluate"
-  # retorna número entre 0 e 1 formatado sem o "0" que precede o separador
-  # da parte fracionária – usualmente "."
-  at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
-  inputs=( ${inputs[*]} -itsoffset $at -i $sufixo )
-  filters=( ${filters[*]} "[2:a]flanger=width=35, volume=${volume}[a2];" )
-  labels=( ${labels[*]} "[a2]" )
-fi
+weights=( 1 )
 
 # leitura dos números seriais dos concursos cumulativos
 exec 3< video/acc.dat
@@ -122,16 +110,32 @@ if (( m > 0 )); then
   start=$( media_duration $intro )  # duração da introdução
 
   # prepara parâmetros associando SFX aos concursos cumulativos
-  for (( k=0, j=${#labels[*]}+1, volume++; k<m; k++, j++ )); do
+  for (( k=0, j=2; k<m; k++, j++ )); do
     at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
     inputs=( ${inputs[*]} -itsoffset $at -i $sfx )
-    filters=( ${filters[*]} "[$j:a]volume=${volume}[a$j];" )
+    filters=( ${filters[*]} "[$j:a]volume=${ratio}[a$j];" )
     labels=( ${labels[*]} "[a$j]" )
+    weights=( ${weights[*]} 2 )
   done
 
 fi
 
-# combinação dos filtros individuais --> estéreo ampliado
-filters="${filters[*]} ${labels[*]}amix=inputs=${#labels[*]}, extrastereo=m=2"
+# agrega o áudio de encerramento se possível
+tc=$( media_duration $combo )
+ts=$( media_duration $sufixo )
+if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
+  # prefixa com "0" evitando erro de argumento do "itsoffset" quando "evaluate"
+  # retorna número entre 0 e 1 formatado sem o "0" que precede o separador
+  # da parte fracionária – usualmente "."
+  at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
+  inputs=( ${inputs[*]} -itsoffset $at -i $sufixo )
+  m=$(( 2 + $m ))
+  filters=( ${filters[*]} "[$m:a]volume=${ratio}[a$m];" )
+  labels=( ${labels[*]} "[a$m]" )
+  weights=( ${weights[*]} 1 )
+fi
+
+# combinação dos filtros individuais + normalização + estéreo ampliado
+filters="${filters[*]} ${labels[*]}amix=inputs=${#labels[*]}:weights=${weights[*]}:dropout_transition=0, loudnorm, extrastereo=m=2"
 
 ffmpeg ${inputs[*]} -filter_complex "$filters" -async 1 -c:v copy -c:a aac -b:a 64k -y $final
