@@ -87,10 +87,32 @@ sfx=video/audio/click.wav       # áudio SFX de curta duração
 
 ratio='4.0'  # razão entre volumes de saída e entrada
 
-inputs=( -i $combo -i $prefixo )
-filters=( "[1:a]volume=${ratio}[a1];" )
-labels=( "[a1]" )
-weights=( 1 )
+buffer=/tmp/sql.dat
+
+cat <<EOT > $buffer
+begin transaction;
+/**
+ * tabela dos argumentos básicos para montagem dos parâmetros de execução do
+ * ffmpeg para agregar áudio à animação
+*/
+create temp table f (
+  at        real                  -- delay absoluto em segundos
+            check(at is null
+              or at >= 0),
+  input     text,                 -- path relativo da mídia
+  stream    integer,              -- número de ordem do streaming
+  filters   text,                 -- sequência de 1+ filtros
+  weight    integer               -- grau de ponderação na mixagem tal que
+            check(weight is null  -- quanto menor, maior será a prioridade
+              or weight > 0)
+);
+/**
+ * preenchimento da tabela de argumentos básicos -- declaração pendente!
+*/
+insert into f values
+(null, "$combo", null, null, null),         -- animação sem áudio
+(null, "$prefixo", 1, "volume=${ratio}", 2) -- áudio da introdução
+EOT
 
 # leitura dos números seriais dos concursos cumulativos
 exec 3< video/acc.dat
@@ -112,10 +134,7 @@ if (( m > 0 )); then
   # prepara parâmetros associando SFX aos concursos cumulativos
   for (( k=0, j=2; k<m; k++, j++ )); do
     at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
-    inputs=( ${inputs[*]} -itsoffset $at -i $sfx )
-    filters=( ${filters[*]} "[$j:a]volume=${ratio}[a$j];" )
-    labels=( ${labels[*]} "[a$j]" )
-    weights=( ${weights[*]} 2 )
+    echo ", ($at, '$sfx', $j, 'volume=${ratio}', 1)" >> $buffer
   done
 
 fi
@@ -128,14 +147,38 @@ if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
   # retorna número entre 0 e 1 formatado sem o "0" que precede o separador
   # da parte fracionária – usualmente "."
   at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
-  inputs=( ${inputs[*]} -itsoffset $at -i $sufixo )
   m=$(( 2 + $m ))
-  filters=( ${filters[*]} "[$m:a]volume=${ratio}[a$m];" )
-  labels=( ${labels[*]} "[a$m]" )
-  weights=( ${weights[*]} 1 )
+  echo ", ($at, '$sufixo', $m, 'volume=${ratio}', 2)" >> $buffer
 fi
 
-# combinação dos filtros individuais + normalização + estéreo ampliado
-filters="${filters[*]} ${labels[*]}amix=inputs=${#labels[*]}:weights=${weights[*]}:dropout_transition=0, loudnorm, extrastereo=m=2"
+cat <<EOT >> $buffer
+; drop table if exists v;
+/**
+ * consulta montagem dos parâmetros do ffmpeg ordenadas por magnitude do delay
+*/
+create table v as select
+    ifnull("-itsoffset " || at || " ", "") || "-i " || input as input,
+    '[' || stream || ':a]' || ifnull(filters, "") || label || ";" as filters,
+    label,
+    weight
+  from (
+    select f.*, null as label from f where rowid == 1
+    union all
+    select f.*, '[a' || stream || ']' as label from f where rowid > 1
+  ) order by at;
+commit;
+EOT
 
-ffmpeg ${inputs[*]} -filter_complex "$filters" -async 1 -c:v copy -c:a aac -b:a 64k -y $final
+sqlite3 loto.sqlite ".read $buffer"
+
+# combinação de filtros individuais -> mixagem -> normalização + estéreo ampliado
+
+ffmpeg $(sqlite3 loto.sqlite 'select group_concat(input, " ") from v') \
+-filter_complex "$(sqlite3 loto.sqlite <<EOT
+select group_concat(filters, " ") || " " || \
+group_concat(label, "") || "amix=inputs=" || count(label) || \
+":weights=" || group_concat(weight, " ") || \
+":dropout_transition=0, loudnorm, extrastereo=m=2" from v;
+drop table v;
+EOT
+)" -async 1 -c:v copy -c:a aac -b:a 96k -y $final
