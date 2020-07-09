@@ -87,14 +87,14 @@ sfx=video/audio/click.wav       # áudio SFX de curta duração
 
 ratio='4.0'  # razão entre volumes de saída e entrada
 
-buffer=/tmp/sql.dat
+buffer=/tmp/buffer.sql
 
 cat <<EOT > $buffer
 begin transaction;
-/**
- * tabela dos argumentos básicos para montagem dos parâmetros de execução do
- * ffmpeg para agregar áudio à animação
-*/
+--
+-- tabela dos argumentos básicos para montagem dos parâmetros de execução do
+-- ffmpeg para agregar áudio à animação
+--
 create temp table f (
   at        real                  -- delay absoluto em segundos
             check(at is null
@@ -106,11 +106,9 @@ create temp table f (
             check(weight is null  -- quanto menor, maior será a prioridade
               or weight > 0)
 );
-/**
- * preenchimento da tabela de argumentos básicos -- declaração pendente!
-*/
+-- preenchimento da tabela de argumentos básicos -- declaração pendente!
 insert into f values
-(null, "$combo", null, null, null),         -- animação sem áudio
+(null, "$combo", null, null, null),         -- vídeo da animação
 (null, "$prefixo", 1, "volume=${ratio}", 2) -- áudio da introdução
 EOT
 
@@ -152,33 +150,42 @@ if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
 fi
 
 cat <<EOT >> $buffer
-; drop table if exists v;
+; -- fim do preenchimento da tabela dos argumentos básicos
+drop table if exists anima;
 /**
- * consulta montagem dos parâmetros do ffmpeg ordenadas por magnitude do delay
+ * tabela dos parâmetros do ffmpeg ordenadas por magnitude do delay
 */
-create table v as select
-    ifnull("-itsoffset " || at || " ", "") || "-i " || input as input,
-    '[' || stream || ':a]' || ifnull(filters, "") || label || ";" as filters,
-    label,
-    weight
-  from (
-    select f.*, null as label from f where rowid == 1
+create table anima as
+  with me (id, at, input, stream, filters, weight, label) as (
+    select rowid, f.*, '[a' || f.stream || ']' as label from f order by at
+  ) select '-i ' || input as input, null as filters, null as label, null as weight
+    from me where id == 1
     union all
-    select f.*, '[a' || stream || ']' as label from f where rowid > 1
-  ) order by at;
+    select '-i ' || input, '[' || stream || ':a]' || filters || label || ';', label, weight
+    from me where id == 2
+    union all
+    select '-itsoffset ' || at || ' ' || '-i ' || input, '[' || stream || ':a]' || filters || label || ';', label, weight
+    from me where id > 2;
 commit;
 EOT
 
-sqlite3 loto.sqlite ".read $buffer"
-
 # combinação de filtros individuais -> mixagem -> normalização + estéreo ampliado
 
-ffmpeg $(sqlite3 loto.sqlite 'select group_concat(input, " ") from v') \
--filter_complex "$(sqlite3 loto.sqlite <<EOT
-select group_concat(filters, " ") || " " || \
-group_concat(label, "") || "amix=inputs=" || count(label) || \
-":weights=" || group_concat(weight, " ") || \
-":dropout_transition=0, loudnorm, extrastereo=m=2" from v;
-drop table v;
+ffmpeg $(sqlite3 loto.sqlite <<EOT
+.read $buffer
+--
+-- montagem dos parâmetros de entrada do ffmpeg
+--
+select group_concat(input, ' ') from anima;
+EOT
+) -filter_complex "$(sqlite3 loto.sqlite <<EOT
+--
+-- montagem dos parâmetros do filtro complexo
+--
+select group_concat(filters, ' ') || ' ' \
+  || group_concat(label, '') || 'amix=inputs=' || count(label) \
+  || ':weights=' || group_concat(weight, ' ') \
+  || ':dropout_transition=0, loudnorm, extrastereo=m=2'
+from anima;
 EOT
 )" -async 1 -c:v copy -c:a aac -b:a 96k -y $final
