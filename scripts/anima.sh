@@ -75,9 +75,10 @@ echo -e "file '${intro##*/}'\nfile '${content##*/}'" > $comboFiles
 
 ffmpeg -f concat -safe 0 -i $comboFiles -c copy -y $combo
 
-# agrega áudio à combinação recém gerada, associando SFX aos quadros da animação
+# Agrega áudio à combinação recém gerada, associando SFX aos quadros da animação
 # correspondentes a concursos sem apostas ganhadoras do prêmio principal – cujos
 # números seriais são lidos de arquivo gerado pelo script contraparte R/anima.R –
+# além de SFX na introdução e no encerramento quando possível.
 
 final=video/loto.mp4            # arquivo da animação resultante
 
@@ -87,36 +88,17 @@ sfx=video/audio/click.wav       # áudio SFX de curta duração
 
 ratio='4.0'  # razão entre volumes de saída e entrada
 
-buffer=/tmp/buffer.sql
+# registros da tabela sql – declarada a posteriori – de argumentos p/montagem dos
+# parâmetros das mídias componentes da animação, iniciada com o único vídeo e com
+# o áudio de introdução
+a inserir na tabela de parâmetros – criada a posteriori –
+lista=("(null, '$combo', null, null, null)," "(null, '$prefixo', 1, 'volume=${ratio}', 2)")
 
-cat <<EOT > $buffer
-begin transaction;
---
--- tabela dos argumentos básicos para montagem dos parâmetros de execução do
--- ffmpeg para agregar áudio à animação
---
-create temp table f (
-  at        real                  -- delay absoluto em segundos
-            check(at is null
-              or at >= 0),
-  input     text,                 -- path relativo da mídia
-  stream    integer,              -- número de ordem do streaming
-  filters   text,                 -- sequência de 1+ filtros
-  weight    integer               -- grau de ponderação na mixagem tal que
-            check(weight is null  -- quanto menor, maior será a prioridade
-              or weight > 0)
-);
--- preenchimento da tabela de argumentos básicos -- declaração pendente!
-insert into f values
-(null, "$combo", null, null, null),         -- vídeo da animação
-(null, "$prefixo", 1, "volume=${ratio}", 2) -- áudio da introdução
-EOT
-
-# leitura dos números seriais dos concursos cumulativos
+# leitura dos números seriais dos concursos sem apostas ganhadoras
 exec 3< video/acc.dat
 read -u 3 -d "\n" -a acc
 exec 3<&-
-m=${#acc[*]}  # quantidade de concursos cumulativos
+m=${#acc[*]}  # quantidade de concursos sem apostas ganhadoras
 
 if (( m > 0 )); then
 
@@ -129,47 +111,75 @@ if (( m > 0 )); then
   base=${first//[^0-9]/}            # número serial do concurso inicial
   start=$( media_duration $intro )  # duração da introdução
 
-  # prepara parâmetros associando SFX aos concursos cumulativos
+  # alista registros p/montagem dos parâmetros associando SFX aos concursos‥
   for (( k=0, j=2; k<m; k++, j++ )); do
     at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
-    echo ", ($at, '$sfx', $j, 'volume=${ratio}', 1)" >> $buffer
+    lista=("${lista[@]}, ($at, '$sfx', $j, 'volume=${ratio}', 1)")
   done
 
 fi
 
-# agrega o áudio de encerramento se possível
+# alista registro p/montagem dos parâmetros do áudio de encerramento se a duração
+# deste áudio mais um segundo é menor igual à duração do vídeo da combinação
 tc=$( media_duration $combo )
 ts=$( media_duration $sufixo )
 if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
   # prefixa com "0" evitando erro de argumento do "itsoffset" quando "evaluate"
-  # retorna número entre 0 e 1 formatado sem o "0" que precede o separador
-  # da parte fracionária – usualmente "."
+  # retorna número entre 0 e 1 formatado sem o "0" que precede o separador da
+  # parte fracionária – usualmente "."
   at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
   m=$(( 2 + $m ))
-  echo ", ($at, '$sufixo', $m, 'volume=${ratio}', 2)" >> $buffer
+  lista=("${lista[@]}, ($at, '$sufixo', $m, 'volume=${ratio}', 2)")
 fi
 
-cat <<EOT >> $buffer
-; -- fim do preenchimento da tabela dos argumentos básicos
+# cria o buffer do script sql que organiza argumentos em tabelas p/montagem dos
+# parâmetros de execução do ffmpeg para agregar áudio à animação
+
+buffer=/tmp/buffer.sql
+
+cat <<EOT > $buffer
+begin transaction;
+
+--
+-- tabela dos argumentos para montagem dos parâmetros de execução do ffmpeg‥
+--
+create temp table f (
+  at        real                --> 'delay time' absoluto em segundos
+            check(at >= 0),
+  input     text,               --> path relativo da mídia
+  stream    integer,            --> número de ordem do streaming
+  filters   text,               --> sequência de 1+ filtros
+  weight    integer             --> grau de ponderação na mixagem tal que
+            check(weight > 0)   --  quanto menor, maior será a prioridade
+);
+
+insert into f values ${lista[@]};   --> preenchimento da tabela
+
 drop table if exists anima;
-/**
- * tabela dos parâmetros do ffmpeg ordenadas por magnitude do delay
-*/
+
+--
+-- tabela dos parâmetros do ffmpeg ordenadas por magnitude do 'delay time'
+--
 create table anima as
   with me (id, at, input, stream, filters, weight, label) as (
     select rowid, f.*, '[a' || f.stream || ']' as label from f order by at
-  ) select '-i ' || input as input, null as filters, null as label, null as weight
+  ) select '-i ' || input as input, null as filters, null as label,
+      null as weight
     from me where id == 1
     union all
-    select '-i ' || input, '[' || stream || ':a]' || filters || label || ';', label, weight
+    select '-i ' || input, '[' || stream || ':a]' || filters || label || ';',
+      label, weight
     from me where id == 2
     union all
-    select '-itsoffset ' || at || ' ' || '-i ' || input, '[' || stream || ':a]' || filters || label || ';', label, weight
+    select '-itsoffset ' || at || ' ' || '-i ' || input, '[' || stream || ':a]'
+      || filters || label || ';', label, weight
     from me where id > 2;
+
 commit;
 EOT
 
-# combinação de filtros individuais -> mixagem -> normalização + estéreo ampliado
+# agregação de áudio à animação via ffmpeg tal que o áudio é a combinação de
+# 'streamings' mixados, então normalizados com estéreo ampliado
 
 ffmpeg $(sqlite3 loto.sqlite <<EOT
 .read $buffer
