@@ -90,8 +90,7 @@ ratio='4.0'  # razão entre volumes de saída e entrada
 
 # registros da tabela sql – declarada a posteriori – de argumentos p/montagem dos
 # parâmetros das mídias componentes da animação, iniciada com o único vídeo e com
-# o áudio de introdução
-a inserir na tabela de parâmetros – criada a posteriori –
+# o áudio de introdução a inserir na tabela de parâmetros – criada a posteriori –
 lista=("(null, '$combo', null, null, null)," "(null, '$prefixo', 1, 'volume=${ratio}', 2)")
 
 # leitura dos números seriais dos concursos sem apostas ganhadoras
