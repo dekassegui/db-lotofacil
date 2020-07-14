@@ -88,9 +88,9 @@ sfx=video/audio/click.wav       # áudio SFX de curta duração
 
 ratio='4.0'  # razão entre volumes de saída e entrada
 
-# registros da tabela sql – declarada a posteriori – de argumentos p/montagem dos
-# parâmetros das mídias componentes da animação, iniciada com o único vídeo e com
-# o áudio de introdução a inserir na tabela de parâmetros – criada a posteriori –
+# lista de registros da tabela sql – declarada a posteriori – de argumentos
+# p/montagem dos parâmetros das mídias componentes da animação, iniciada com
+# o registro do único vídeo e com o registro do áudio de introdução
 lista=("(null, '$combo', null, null, null)," "(null, '$prefixo', 1, 'volume=${ratio}', 2)")
 
 # leitura dos números seriais dos concursos sem apostas ganhadoras
@@ -131,8 +131,8 @@ if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
   lista=("${lista[@]}, ($at, '$sufixo', $m, 'volume=${ratio}', 2)")
 fi
 
-# cria o buffer do script sql que organiza argumentos em tabelas p/montagem dos
-# parâmetros de execução do ffmpeg para agregar áudio à animação
+# cria o buffer do script sql que organiza argumentos em tabelas p/montagem
+# do parâmetros de execução do ffmpeg para agregar áudio à animação
 
 buffer=/tmp/buffer.sql
 
@@ -145,7 +145,7 @@ begin transaction;
 create temp table f (
   at        real                --> 'delay time' absoluto em segundos
             check(at >= 0),
-  input     text,               --> path relativo da mídia
+  infile    text,               --> path relativo da mídia
   stream    integer,            --> número de ordem do streaming
   filters   text,               --> sequência de 1+ filtros
   weight    integer             --> grau de ponderação na mixagem tal que
@@ -160,19 +160,15 @@ drop table if exists anima;
 -- tabela dos parâmetros do ffmpeg ordenadas por magnitude do 'delay time'
 --
 create table anima as
-  with me (id, at, input, stream, filters, weight, label) as (
-    select rowid, f.*, '[a' || f.stream || ']' as label from f order by at
-  ) select '-i ' || input as input, null as filters, null as label,
-      null as weight
-    from me where id == 1
+  with me (at, infile, stream, filters, weight, label) as (
+    select f.*, '[a' || f.stream || ']' as label from f order by at, stream
+  ) select '-i ' || infile as infile, '[' || stream || ':a]' || filters
+      || label || ';' as filters, label, weight
+    from me where at isnull
     union all
-    select '-i ' || input, '[' || stream || ':a]' || filters || label || ';',
-      label, weight
-    from me where id == 2
-    union all
-    select '-itsoffset ' || at || ' ' || '-i ' || input, '[' || stream || ':a]'
+    select '-itsoffset ' || at || ' ' || '-i ' || infile, '[' || stream || ':a]'
       || filters || label || ';', label, weight
-    from me where id > 2;
+    from me where at notnull;
 
 commit;
 EOT
@@ -185,7 +181,7 @@ ffmpeg $(sqlite3 loto.sqlite <<EOT
 --
 -- montagem dos parâmetros de entrada do ffmpeg
 --
-select group_concat(input, ' ') from anima;
+select group_concat(infile, ' ') from anima;
 EOT
 ) -filter_complex "$(sqlite3 loto.sqlite <<EOT
 --
