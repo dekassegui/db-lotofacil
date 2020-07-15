@@ -91,7 +91,7 @@ ratio='4.0'  # razão entre volumes de saída e entrada
 # lista de registros da tabela sql – declarada a posteriori – de argumentos
 # p/montagem dos parâmetros das mídias componentes da animação, iniciada com
 # o registro do único vídeo e com o registro do áudio de introdução
-lista=("(null, '$combo', null, null, null)," "(null, '$prefixo', 1, 'volume=${ratio}', 2)")
+lista=("(null, '$combo', null, null)," "(null, '$prefixo', 'volume=${ratio}', 2)")
 
 # leitura dos números seriais dos concursos sem apostas ganhadoras
 exec 3< video/acc.dat
@@ -111,9 +111,9 @@ if (( m > 0 )); then
   start=$( media_duration $intro )  # duração da introdução
 
   # alista registros p/montagem dos parâmetros associando SFX aos concursos‥
-  for (( k=0, j=2; k<m; k++, j++ )); do
+  for (( k=0; k<m; k++ )); do
     at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
-    lista=("${lista[@]}, ($at, '$sfx', $j, 'volume=${ratio}', 1)")
+    lista=("${lista[@]}, ($at, '$sfx', 'volume=${ratio}', 1)")
   done
 
 fi
@@ -127,12 +127,11 @@ if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
   # retorna número entre 0 e 1 formatado sem o "0" que precede o separador da
   # parte fracionária – usualmente "."
   at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
-  m=$(( 2 + $m ))
-  lista=("${lista[@]}, ($at, '$sufixo', $m, 'volume=${ratio}', 2)")
+  lista=("${lista[@]}, ($at, '$sufixo', 'volume=${ratio}', 2)")
 fi
 
 # cria o buffer do script sql que organiza argumentos em tabelas p/montagem
-# do parâmetros de execução do ffmpeg para agregar áudio à animação
+# dos parâmetros de execução do ffmpeg para agregar áudio à animação
 
 buffer=/tmp/buffer.sql
 
@@ -146,7 +145,6 @@ create temp table f (
   at        real                --> 'delay time' absoluto em segundos
             check(at >= 0),
   infile    text,               --> path relativo da mídia
-  stream    integer,            --> número de ordem do streaming
   filters   text,               --> sequência de 1+ filtros
   weight    integer             --> grau de ponderação na mixagem tal que
             check(weight > 0)   --  quanto menor, maior será a prioridade
@@ -160,8 +158,9 @@ drop table if exists anima;
 -- tabela dos parâmetros do ffmpeg ordenadas por magnitude do 'delay time'
 --
 create table anima as
-  with me (at, infile, stream, filters, weight, label) as (
-    select f.*, '[a' || f.stream || ']' as label from f order by at, stream
+  with me (at, infile, filters, weight, stream, label) as (
+    select f.*, rowid-1 as stream, '[a' || (rowid-1) || ']' as label
+    from f order by at, stream
   ) select '-i ' || infile as infile, '[' || stream || ':a]' || filters
       || label || ';' as filters, label, weight
     from me where at isnull
@@ -191,6 +190,6 @@ select group_concat(filters, ' ') || ' ' \
   || group_concat(label, '') || 'amix=inputs=' || count(label) \
   || ':weights=' || group_concat(weight, ' ') \
   || ':dropout_transition=0, loudnorm, extrastereo=m=2'
-from anima;
+from anima where filters notnull;
 EOT
 )" -async 1 -c:v copy -c:a aac -b:a 96k -y $final
