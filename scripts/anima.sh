@@ -39,11 +39,9 @@ while IFS= read -u 3 -r line; do echo $line >&4; done
 exec 3<&-   4>&-
 
 quality=34        # 0 (lossless) a 51 (sofrível) default 23
-speed="medium"    # ultrafast, superfast, veryfast, faster, fast, medium,
-                  # slow, slower, veryslow
-tune="animation"  # animation fastdecode film grain psnr stillimage
-                  # zerolatency
-codec=libx264
+speed="medium"    # ultrafast, superfast, veryfast, faster, fast, medium, slow,‥
+tune="animation"  # animation fastdecode film grain psnr stillimage zerolatency
+codec=libx264     # video codec
 pix=yuv420p       # adequado para iOS
 
 common="-c:v $codec -profile:v baseline -preset $speed -tune $tune -crf $quality -pix_fmt $pix"
@@ -91,7 +89,7 @@ ratio='4.0'  # razão entre volumes de saída e entrada
 # lista de registros da tabela sql – declarada a posteriori – de argumentos
 # p/montagem dos parâmetros das mídias componentes da animação, iniciada com
 # o registro do único vídeo e com o registro do áudio de introdução
-lista=("(null, '$combo', null, null)," "(null, '$prefixo', 'volume=${ratio}', 2)")
+lista="(null, '$combo', null, null), (null, '$prefixo', 'volume=${ratio}', 2)"
 
 # leitura dos números seriais dos concursos sem apostas ganhadoras
 exec 3< video/acc.dat
@@ -113,7 +111,7 @@ if (( m > 0 )); then
   # alista registros p/montagem dos parâmetros associando SFX aos concursos‥
   for (( k=0; k<m; k++ )); do
     at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
-    lista=("${lista[@]}, ($at, '$sfx', 'volume=${ratio}', 1)")
+    lista="$lista, ($at, '$sfx', 'volume=$ratio', 1)"
   done
 
 fi
@@ -127,11 +125,11 @@ if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
   # retorna número entre 0 e 1 formatado sem o "0" que precede o separador da
   # parte fracionária – usualmente "."
   at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
-  lista=("${lista[@]}, ($at, '$sufixo', 'volume=${ratio}', 2)")
+  lista="$lista, ($at, '$sufixo', 'volume=$ratio', 2)"
 fi
 
 # cria o buffer do script sql que organiza argumentos em tabelas p/montagem
-# dos parâmetros de execução do ffmpeg para agregar áudio à animação
+# dos parâmetros de execução do ffmpeg afim de agregar áudio à animação
 
 buffer=/tmp/buffer.sql
 
@@ -150,12 +148,13 @@ create temp table f (
             check(weight > 0)   --  quanto menor, maior será a prioridade
 );
 
-insert into f values ${lista[@]};   --> preenchimento da tabela
+insert into f values $lista;   --> preenchimento da tabela
 
 drop table if exists anima;
 
 --
--- tabela dos parâmetros do ffmpeg ordenadas por magnitude do 'delay time'
+-- tabela dos parâmetros do ffmpeg ordenadas por magnitude do 'delay time' com
+-- desempate pelo número do stream
 --
 create table anima as
   with me (at, infile, filters, weight, stream, label) as (
@@ -172,24 +171,19 @@ create table anima as
 commit;
 EOT
 
-# agregação de áudio à animação via ffmpeg tal que o áudio é a combinação de
-# 'streamings' mixados, então normalizados com estéreo ampliado
-
-ffmpeg $(sqlite3 loto.sqlite <<EOT
+# executa o script sql no buffer e requisita a sequência de parâmetros dos infile
+infiles=$(sqlite3 loto.sqlite <<EOT
 .read $buffer
---
--- montagem dos parâmetros de entrada do ffmpeg
---
 select group_concat(infile, ' ') from anima;
 EOT
-) -filter_complex "$(sqlite3 loto.sqlite <<EOT
---
--- montagem dos parâmetros do filtro complexo
---
-select group_concat(filters, ' ') || ' ' \
-  || group_concat(label, '') || 'amix=inputs=' || count(label) \
-  || ':weights=' || group_concat(weight, ' ') \
-  || ':dropout_transition=0, loudnorm, extrastereo=m=2'
-from anima where filters notnull;
-EOT
-)" -async 1 -c:v copy -c:a aac -b:a 96k -y $final
+)
+
+# requisita as sequências de parâmetros do filtro complexo
+IFS='|' read filters labels count weights <<< $(sqlite3 loto.sqlite "select \
+group_concat(filters, ' '), group_concat(label, ''), count(label), \
+group_concat(weight, ' ') from anima where filters notnull")
+
+# agregação de áudio à animação via ffmpeg tal que o áudio é a combinação dos
+# 'streams' mixados que é normalizada com estéreo ampliado
+ffmpeg $infiles -filter_complex "$filters ${labels}amix=inputs=$count:weights=$weights:dropout_transition=0, loudnorm, extrastereo=m=2" \
+-async 1 -c:v copy -c:a aac -b:a 96k -y $final
