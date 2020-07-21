@@ -39,7 +39,7 @@ while IFS= read -u 3 -r line; do echo $line >&4; done
 exec 3<&-   4>&-
 
 quality=34        # 0 (lossless) a 51 (sofrível) default 23
-speed="medium"    # ultrafast, superfast, veryfast, faster, fast, medium, slow,‥
+speed="medium"    # ultrafast superfast veryfast faster fast medium slow,‥
 tune="animation"  # animation fastdecode film grain psnr stillimage zerolatency
 codec=libx264     # video codec
 pix=yuv420p       # adequado para iOS
@@ -86,10 +86,9 @@ sfx=video/audio/click.wav       # áudio SFX de curta duração
 
 ratio='4.0'  # razão entre volumes de saída e entrada
 
-# lista de registros da tabela sql – declarada a posteriori – de argumentos
-# p/montagem dos parâmetros das mídias componentes da animação, iniciada com
-# o registro do único vídeo e com o registro do áudio de introdução
-lista="(null, '$combo', null, null), (null, '$prefixo', 'volume=${ratio}', 2)"
+infiles=("-i $combo" "-i $prefixo")
+filters="[1:a]volume=${ratio}[prefix];"
+labels=("[prefix]")
 
 # leitura dos números seriais dos concursos sem apostas ganhadoras
 exec 3< video/acc.dat
@@ -99,91 +98,40 @@ m=${#acc[*]}  # quantidade de concursos sem apostas ganhadoras
 
 if (( m > 0 )); then
 
+  infiles=("${infiles[@]}" "-i $sfx")
+  filters="$filters [2:a]volume=${ratio}, asplit=$m "
+  for (( i=0; i<m; i++ )); do filters="$filters[s$i]"; done
+  filters="${filters};"
+
   # leitura do valor default da duração de cada quadro da animação
   exec 3< video/animacao.cfg
   while IFS= read -u 3 -r line; do [[ $line =~ ^default ]] && break; done
   exec 3<&-
-  duration=${line#*=}   # duração de cada quadro da animação
-
+  duration=${line#*=}               # duração de cada quadro da animação
   base=${first//[^0-9]/}            # número serial do concurso inicial
   start=$( media_duration $intro )  # duração da introdução
 
-  # alista registros p/montagem dos parâmetros associando SFX aos concursos‥
+  # montagem dos parâmetros associando SFX aos concursos sem ganhadores
   for (( k=0; k<m; k++ )); do
-    at=$( evaluate "$start+("${acc[k]}"-$base)*$duration" )
-    lista="$lista, ($at, '$sfx', 'volume=$ratio', 1)"
+    at=$(evaluate "x=($start+("${acc[k]}"-$base)*$duration)*1000; scale=0; x/1")
+    filters="$filters [s$k]adelay=${at}|${at}[a$k];"
+    labels=(${labels[*]} "[a$k]")
   done
 
 fi
 
-# alista registro p/montagem dos parâmetros do áudio de encerramento se a duração
-# deste áudio mais um segundo é menor igual à duração do vídeo da combinação
+# montagem dos parâmetros do áudio de encerramento se a duração deste áudio mais
+# um segundo é menor igual à duração do vídeo da combinação
 tc=$( media_duration $combo )
 ts=$( media_duration $sufixo )
 if [[ $( evaluate "$tc >= ($ts+1)" ) == 1 ]]; then
-  # prefixa com "0" evitando erro de argumento do "itsoffset" quando "evaluate"
-  # retorna número entre 0 e 1 formatado sem o "0" que precede o separador da
-  # parte fracionária – usualmente "."
-  at=$( evaluate "x=$tc-$ts-1; if (x<1) print 0; print x" )
-  lista="$lista, ($at, '$sufixo', 'volume=$ratio', 2)"
+  at=$(evaluate "x=($tc-$ts-1)*1000; scale=0; x/1")
+  filters="$filters [${#infiles[@]}:a]volume=${ratio}, adelay=${at}|${at}[sufix];"
+  labels=(${labels[*]} "[sufix]")
+  infiles=("${infiles[@]}" "-i $sufixo")
 fi
-
-# cria o buffer do script sql que organiza argumentos em tabelas p/montagem
-# dos parâmetros de execução do ffmpeg afim de agregar áudio à animação
-
-buffer=/tmp/buffer.sql
-
-cat <<EOT > $buffer
-begin transaction;
-
---
--- tabela dos argumentos para montagem dos parâmetros de execução do ffmpeg‥
---
-create temp table f (
-  at        real                --> 'delay time' absoluto em segundos
-            check(at >= 0),
-  infile    text,               --> path relativo da mídia
-  filters   text,               --> sequência de 1+ filtros
-  weight    integer             --> grau de ponderação na mixagem tal que
-            check(weight > 0)   --  quanto menor, maior será a prioridade
-);
-
-insert into f values $lista;   --> preenchimento da tabela
-
-drop table if exists anima;
-
---
--- tabela dos parâmetros do ffmpeg ordenadas por magnitude do 'delay time' com
--- desempate pelo número do stream
---
-create table anima as
-  with me (at, infile, filters, weight, stream, label) as (
-    select f.*, rowid-1 as stream, '[a' || (rowid-1) || ']' as label
-    from f order by at, stream
-  ) select '-i ' || infile as infile, '[' || stream || ':a]' || filters
-      || label || ';' as filters, label, weight
-    from me where at isnull
-    union all
-    select '-itsoffset ' || at || ' ' || '-i ' || infile, '[' || stream || ':a]'
-      || filters || label || ';', label, weight
-    from me where at notnull;
-
-commit;
-EOT
-
-# executa o script sql no buffer e requisita a sequência de parâmetros dos infile
-infiles=$(sqlite3 loto.sqlite <<EOT
-.read $buffer
-select group_concat(infile, ' ') from anima;
-EOT
-)
-
-# requisita as sequências de parâmetros do filtro complexo
-IFS='|' read filters labels count weights <<< $(sqlite3 loto.sqlite "select \
-group_concat(filters, ' '), group_concat(label, ''), count(label), \
-group_concat(weight, ' ') from anima where filters notnull")
 
 # agregação de áudio à animação via ffmpeg tal que o áudio é a combinação dos
 # 'streams' mixados que é normalizada com estéreo ampliado
-ffmpeg $infiles -filter_complex "$filters ${labels}amix=inputs=$count:weights=$weights:dropout_transition=0, loudnorm, extrastereo=m=2" \
--async 1 -c:v copy -c:a aac -b:a 96k -y $final
+ffmpeg ${infiles[@]} -filter_complex "$filters ${labels[*]}amix=inputs=${#labels[*]}:dropout_transition=0, loudnorm, extrastereo=m=2" \
+-c:v copy -c:a aac -b:a 96k -y $final
