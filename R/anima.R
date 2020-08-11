@@ -24,8 +24,8 @@ library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
 
 con <- dbConnect(SQLite(), dbname='loto.sqlite')
 
-CONCURSO_MAIS_RECENTE <- dbGetQuery(con,
-  'SELECT concurso FROM concursos ORDER BY concurso DESC LIMIT 1')[1, 1]
+CONCURSO_MAIS_RECENTE <- as.integer(dbGetQuery(con,
+  'SELECT concurso FROM concursos ORDER BY concurso DESC LIMIT 1')[1, 1])
 
 arguments <- commandArgs(TRUE)
 if (length(arguments) == 0) {
@@ -36,7 +36,7 @@ if (length(arguments) == 0) {
     if (arguments[1] < 0) {
       CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE+arguments[1]+1
     } else {
-      CONCURSO_INICIAL <- max(arguments[1], 1)
+      CONCURSO_INICIAL <- min(max(arguments[1], 1), CONCURSO_MAIS_RECENTE)
     }
   } else {
     CONCURSO_INICIAL <- max(arguments[1], 1)
@@ -261,7 +261,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
   text(X2, minor, sprintf("Lotofácil %04d", CONCURSO), srt=90, adj=ZADJ,
         cex=2.5, font=2, col=ACC_COLORS[ ACC[ACC$concurso == CONCURSO, 2]+1 ])
 
-  if (ACC[ACC$concurso == CONCURSO, 2]) cat(CONCURSO, "\n", file=acc)
+  if (ACC[ACC$concurso == CONCURSO, 2]) cat(CONCURSO, "\n", sep="", file=acc)
 
   # -- DIAGRAMA DAS LATÊNCIAS
 
