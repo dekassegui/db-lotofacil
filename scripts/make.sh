@@ -20,15 +20,9 @@ long_date() {
 loto_date() {
   (( $# )) && dia=$* || dia=$(date +'%F %H:%M:%S')
   read u F ndays <<< $(date -d "$dia" +'%u %F 0')
-  # testa se dia da semana da data referência é sábado ou domingo
-  # representados por 192 == 1<<6 | 1<<7
-  if (( 192 & 1<<$u )); then
-    ndays=$(( 1 + $u % 2 ))
-  # testa se horário da data referência, cujo dia da semana é segunda, terça,
-  # quarta, quinta ou sexta, é anterior a 20:00 <-- horário usual dos sorteios
-  elif (( $(date -d "$dia" +%s) < $(date -d "$F 20:00" +%s) )); then
-    ndays=1
-  fi
+  # testa se dia da semana da data referência é domingo ou se horário da data
+  # referência é anterior a 20:00 <-- horário usual dos sorteios
+  (( $u == 7 || $(date -d "$dia" +%s) < $(date -d "$F 20:00" +%s) )) && ndays=1
   date -d "$F -$ndays days" +%F
 }
 
