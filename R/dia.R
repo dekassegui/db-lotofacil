@@ -11,17 +11,23 @@ source("R/param.R")   # checa disponibilidade da tabela "param" + atualização
 
 con <- dbConnect(SQLite(), "loto.sqlite")
 
-# requisita o número do concurso mais recente, número de concursos acumulados
-# e proporção de premiações ao longo do tempo
-loto <- dbGetQuery(con, "WITH cte(m, n) AS (
-  SELECT MAX(concurso), SUM(ganhadores_15_numeros>0) FROM concursos
-) SELECT m AS concurso, m-MAX(concurso) AS acumulados, CAST(n as REAL)/m AS premiacao
-  FROM cte, concursos WHERE ganhadores_15_numeros>0")
+# requisita o número do concurso mais recente e a proporção de premiações ao
+# longo do tempo
+loto <- dbGetQuery(con, "SELECT m AS concurso, cast(n AS real)/m AS premiacao FROM (SELECT max(concurso) AS m, sum(ganhadores_15_numeros>0) AS n FROM concursos)")
+
+# requisita os 12 concursos mais recentes e respectivos status de premiação
+concursos <- dbGetQuery(con, paste("select concurso, ganhadores_15_numeros>0 as premiado from concursos where concurso >= ", loto$concurso-12+1))
 
 # requisita frequências, latências e atipicidades dos números no concurso mais recente
 numeros <- dbGetQuery(con, "SELECT frequencia, latencia, atipico FROM info_bolas ORDER BY bola")
 
-numeros$maxLatencia <- sapply(1:25, function(n){ dbExecute(con, sprintf('update param set status=1 where comentario glob "* %d"', n)); dbGetQuery(con, 'select max(len)-1 from esperas')[1, 1] })
+bolas <- 1:25
+
+numeros$maxLatencia <- sapply(bolas, function (bola) {
+  dbExecute(con,
+    sprintf('update param set status=1 where comentario glob "* %d"', bola))
+  dbGetQuery(con, 'select max(len)-1 from esperas')[1, 1]
+})
 
 # requisita os números sorteados no concurso anterior ao mais recente
 anterior <- dbGetQuery(con, paste("SELECT bola FROM bolas_sorteadas WHERE concurso+1 ==", loto$concurso))
@@ -78,79 +84,93 @@ numeros[numeros$latencia == 0, "corFrente"] <- "black"
 
 rm(cores, five, selection)
 
-png(filename="img/dia.png", width=500, height=600, pointsize=10, family="Roboto Condensed")
+VC <- c(.67, .27); AR <- c(1, 1/2); AL <- c(0, 1/2)
 
-par(mar=c(4.25, .75, 4.25, .75), font=2)
+# -- montagem do diagrama: HEADER --> FOOTER --> CONTEÚDO
 
-plot(NULL, type="n", axes=F, xaxs="i", yaxs="i", xlim=c(0, 5), ylim=c(0, 5), xlab="")
+png(filename="img/dia.png", width=500, height=600, bg="white", pointsize=10, family="Roboto")
 
-title(paste("Lotofácil", loto$concurso), adj=0, line=1.1875, cex.main=3.75)
+layout(matrix(c(1, 3, 2), ncol=1, nrow=3), heights=c(10, 100, 10))
 
-mtext(
-  c("concursos acumulados:", loto$acumulados,
-    "premiação in tempore:", sprintf("%5.2f%%", 100*loto$premiacao)),
-  side=3, at=c(4.46, 4.5), line=c(2.3, 2.3, 1, 1), adj=c(1, 0),
-  cex=1.26, col=c("gray20", "sienna"), family="Roboto"
-)
+# -- HEADER --
+
+par(mar=c(0, .75, 0.75, .75), family="Roboto", font=2, cex=1.25, xaxs="i", yaxs="i")
+
+plot(NULL, type="n", axes=F, xlim=c(0, 5), ylim=c(0, 1), xlab="")
+
+text(.02, .5, paste("Lotofácil", loto$concurso), adj=AL, col="gray15", family="Roboto Condensed", cex=3.125)
+
+text(2.625, .70625, "premiações recentes:", adj=AL, col="gray20")
+cores <- colorRampPalette(c("skyblue", "mediumblue"))(12)
+selecao <- which(!concursos$premiado)
+cores[selecao] <- gray.colors(12, .87, .5)[selecao]
+text(seq(2.575, by=.2, length.out=12), .26, rep.int("\u26AB", 12), adj=AL, col=cores, cex=2)
+rm(cores, selecao)
+
+# -- FOOTER --
+
+par(mar=c(0.75, .75, 0, .75))
+
+plot(NULL, type="n", axes=F, xlim=c(0, 5), ylim=c(0, 1), xlab="")
 
 dat <- matrix(c("\uF00C", "\uF00D", "dodgerblue", "red"), ncol=2, byrow=T)
-mtext(
-  c("números i.i.d. U\u276A1, 25\u276B", dat[1,x],
-    paste0("premiações ~ Geom\u276A", signif(loto$premiacao, 2), "\u276B"), dat[1,y]),
-  side=1, at=c(1.72, 1.76), line=c(1, 1.2, 2.45, 2.65), adj=c(1, 0),
-  cex=c(1.26, 1.75), col=c("gray20", dat[2,x], "gray20", dat[2,y]),
-  family="Roboto"
-)
+text(1.84, VC, c("números i.i.d. U\u276A1, 25\u276B", paste0("premiações ~ Geom\u276A", signif(loto$premiacao, 3), "\u276B")), adj=AR, col="gray20")
+text(1.9, VC, c(dat[1, x], dat[1, y]), adj=AL, col=c(dat[2, x], dat[2, y]))
 rm(dat)
 
-# LEGENDA DAS QUADRÍCULAS
+# legenda das quadrículas
 
-rect(2.82, -0.06, 4.88, -0.46, xpd=T, col="#FFFFA0", border=NA) # background
-mtext(
-  c("frequência", "Atípico\u2215Reincidente", "latência", "latência recorde"),
-  side=1, at=c(2.88, 4.82), line=c(1, 1, 2.45, 2.45), adj=c(0, 1), cex=1.26,
-  col=c("darkred", "black", "violetred", "firebrick"), family="Roboto"
-)
+rect(2.18, 0, 4.54, 1, xpd=T, col="khaki1", border=NA) # background
+text(2.28, VC, c("frequência", "latência"), adj=AL, col=c("darkred", "violetred"))
+text(4.44, VC, c("Atípico\u2215Reincidente", "latência recorde"), adj=AR, col=c("black", "firebrick"))
 
-# ESCALA DE CORES DAS QUADRÍCULAS
+# escala de cores das quadrículas
 
-mtext(
-  rep("\u25A0", 4), side=1, at=5, line=seq(from=.4, by=.81, length.out=4),
-  adj=1, cex=1.1, col=c("orange1", "gold2", "#66CC00", "#33C9FF")
-)
+library(png)
+degrade <- readPNG("img/degrade.png", native=TRUE)
+rasterImage(degrade, 4.66, 0, 4.78, 1, interpolate=TRUE)
+text(4.82, c(.225, .5, .775), c(expression(Q[1]), expression(Q[2]), expression(Q[3])), adj=AL, col='gray7', cex=.8)
 
-for (n in 1:25) {
-  x <- (n-1) %% 5
-  y <- (n-1) %/% 5
-  attach(numeros[n,])
+# -- CONTEÚDO --
+
+TL <- c(0, 1); TR <- c(1, 1); BL <- c(0, 0); BR <- c(1, 0); MID <- c(.5, .5)
+
+par(mar=c(0.5, .75, 0.5, .75), family="Roboto Condensed", cex=1.375)
+
+plot(NULL, type="n", axes=F, xlim=c(0, 5), ylim=c(0, 5), xlab="")
+
+for (bola in bolas) {
+  x <- (bola-1) %% 5
+  y <- (bola-1) %/% 5
+  attach(numeros[bola,])
   # renderiza a quadricula com cor em função da frequência
   rect(x, 4-y, x+1, 5-y, col=corFundo, border="white", lwd=1.5)
   # renderiza o número com cor em função da latência em relevo
   text(
-    c(x+.51, x+.5), c(4.49-y, 4.5-y), sprintf("%02d", n),
-    adj=c(.5, .5), cex=4, col=c("white", corFrente)
+    c(x+.51, x+.5), c(4.49-y, 4.5-y), sprintf("%02d", bola),
+    adj=MID, col=c("white", corFrente), cex=3.125
   )
   # frequência histórica
-  text(x+.1, 4.9-y, frequencia, adj=c(0, 1), cex=1.5, col="darkred")
+  text(x+.1, 4.9-y, frequencia, adj=TL, col="darkred")
   # checa se frequência abaixo do esperado (frequencia < loto$concurso*15/25)
   # e latência acima do esperado (latencia >= 25/15)
   if (atipico) {
-    text(x+.9, 4.9-y, "A", adj=c(1, 1), cex=1.25, col="black")
+    text(x+.9, 4.9-y, "A", adj=TR, col="black")
   } else if (latencia == 0) {
     # renderiza borda extra para evidenciar número recém sorteado
     rect(
       x+.025, 4.025-y, x+.975, 4.975-y, col="transparent", border="black", lwd=2
     )
     # checa se número é reincidente -- sorteado no concurso anterior
-    if (n %in% anterior$bola) {
-      text(x+.9, 4.9-y, "R", adj=c(1, 1), cex=1.25, col="black")
+    if (bola %in% anterior$bola) {
+      text(x+.9, 4.9-y, "R", adj=TR, col="black")
     }
   }
   # latência imediata
-  text(x+.1, 4.1-y, latencia, adj=c(0, 0), cex=1.5, col="violetred")
+  text(x+.1, 4.1-y, latencia, adj=BL, col="violetred")
   # máxima latência histórica
-  text(x+.9, 4.1-y, maxLatencia, adj=c(1, 0), cex=1.5, col="firebrick")
-  detach(numeros[n,])
+  text(x+.9, 4.1-y, maxLatencia, adj=BR, col="firebrick")
+  detach(numeros[bola,])
 }
 
 dev.off()
