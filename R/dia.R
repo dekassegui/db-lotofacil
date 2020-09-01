@@ -25,15 +25,15 @@ bolas <- 1:25
 
 numeros$maxLatencia <- sapply(bolas, function (bola) {
   dbExecute(con,
-    sprintf('update param set status=1 where comentario glob "* %d"', bola))
-  dbGetQuery(con, 'select max(len)-1 from esperas')[1, 1]
+    sprintf("UPDATE param SET status=1 WHERE comentario glob '* %d'", bola))
+  dbGetQuery(con, "SELECT max(len)-1 FROM esperas")[1, 1]
 })
 
 # requisita os números sorteados no concurso anterior ao mais recente
 anterior <- dbGetQuery(con, paste("SELECT bola FROM bolas_sorteadas WHERE concurso+1 ==", loto$concurso))
 
 # requisita tempos de espera por concursos com premiação
-esperas <- dbGetQuery(con, 'SELECT len FROM espera')
+esperas <- dbGetQuery(con, "SELECT len FROM espera")
 
 dbDisconnect(con)
 rm(con)
@@ -62,27 +62,27 @@ numeros$corFundo <- "white"
 five <- fivenum(numeros$frequencia)
 
 cores <- colorRamp(c("#FFCC66", "orange1"), bias=1, space="rgb", interpolate="spline")
-selection <- which(numeros$frequencia>five[4])
-numeros[selection,]$corFundo <- rgb(cores((numeros[selection,]$frequencia-five[4])/(five[5]-five[4])), max=255)
+selecao <- which(numeros$frequencia>five[4])
+numeros[selecao,]$corFundo <- rgb(cores((numeros[selecao,]$frequencia-five[4])/(five[5]-five[4])), max=255)
 
 cores <- colorRamp(c("yellow1", "gold1"), bias=.75, space="rgb", interpolate="spline")
-selection <- which(numeros$frequencia>five[3] & numeros$frequencia<=five[4])
-numeros[selection,]$corFundo <- rgb(cores((numeros[selection,]$frequencia-five[3])/(five[4]-five[3])), max=255)
+selecao <- which(numeros$frequencia>five[3] & numeros$frequencia<=five[4])
+numeros[selecao,]$corFundo <- rgb(cores((numeros[selecao,]$frequencia-five[3])/(five[4]-five[3])), max=255)
 
 cores <- colorRamp(c("#D0FFD0", "seagreen2"), bias=1, space="rgb", interpolate="spline")
-selection <- which(numeros$frequencia>five[2] & numeros$frequencia<=five[3])
-numeros[selection,]$corFundo <- rgb(cores((numeros[selection,]$frequencia-five[2])/(five[3]-five[2])), max=255)
+selecao <- which(numeros$frequencia>five[2] & numeros$frequencia<=five[3])
+numeros[selecao,]$corFundo <- rgb(cores((numeros[selecao,]$frequencia-five[2])/(five[3]-five[2])), max=255)
 
 cores <- colorRamp(c("#ACECFF", "skyblue1"), bias=1, space="rgb", interpolate="spline")
-selection <- which(numeros$frequencia<=five[2])
-numeros[selection,]$corFundo <- rgb(cores((numeros[selection,]$frequencia-five[1])/(five[2]-five[1])), max=255)
+selecao <- which(numeros$frequencia<=five[2])
+numeros[selecao,]$corFundo <- rgb(cores((numeros[selecao,]$frequencia-five[1])/(five[2]-five[1])), max=255)
+
+rm(five)
 
 cores <- colorRampPalette(c("gray0", "gray10", "gray20", "gray80"))(25)
 numeros$corFrente <- cores[rank(numeros$latencia, ties.method="last")]
 # garante máxima tonalidade de cinza para números com mínima latência (=zero)
 numeros[numeros$latencia == 0, "corFrente"] <- "black"
-
-rm(cores, five, selection)
 
 VC <- c(.67, .27); AR <- c(1, 1/2); AL <- c(0, 1/2)
 
@@ -101,7 +101,7 @@ plot(NULL, type="n", axes=F, xlim=c(0, 5), ylim=c(0, 1), xlab="")
 text(.02, .5, paste("Lotofácil", loto$concurso), adj=AL, col="gray15", family="Roboto Condensed", cex=3.125)
 
 text(2.625, .70625, "premiações recentes:", adj=AL, col="gray20")
-cores <- colorRampPalette(c("skyblue", "mediumblue"))(12)
+cores <- colorRampPalette(c("lightblue", "royalblue"))(11); cores[12] <- "blue"
 selecao <- which(!concursos$premiado)
 cores[selecao] <- gray.colors(12, .87, .5)[selecao]
 text(seq(2.575, by=.2, length.out=12), .26, rep.int("\u26AB", 12), adj=AL, col=cores, cex=2)
@@ -129,7 +129,9 @@ text(4.44, VC, c("Atípico\u2215Reincidente", "latência recorde"), adj=AR, col=
 library(png)
 degrade <- readPNG("img/degrade.png", native=TRUE)
 rasterImage(degrade, 4.66, 0, 4.78, 1, interpolate=TRUE)
-text(4.82, c(.225, .5, .775), c(expression(Q[1]), expression(Q[2]), expression(Q[3])), adj=AL, col='gray7', cex=.8)
+text(rep(c(4.84, 4.82), each=3), c(.225, .5, .775), adj=AL, col="black",
+  cex=.8, c(expression(Q[1]), expression(Q[2]), expression(Q[3])))
+rm(degrade)
 
 # -- CONTEÚDO --
 
@@ -159,7 +161,7 @@ for (bola in bolas) {
   } else if (latencia == 0) {
     # renderiza borda extra para evidenciar número recém sorteado
     rect(
-      x+.025, 4.025-y, x+.975, 4.975-y, col="transparent", border="black", lwd=2
+      x+.025, 4.025-y, x+.975, 4.975-y, col="transparent", border="black", lwd=2.5
     )
     # checa se número é reincidente -- sorteado no concurso anterior
     if (bola %in% anterior$bola) {
