@@ -1,24 +1,11 @@
 #!/usr/bin/Rscript --no-init-file
 #
 # Script gerador de imagens do diagrama das frequências e latências dos números
-# sorteados nos concursos, as quais serão quadros de animação via "ffmpeg" e da
-# sequência dos quadros com respectivas durações – roteiro da animação –
-# conforme configuração arbitrária, assim executado:
+# sorteados nos concursos, que serão quadros de animação via "ffmpeg" e da
+# sequência dos quadros com respectivas durações (roteiro da animação) conforme
+# configuração arbitrária, assim executado:
 #
 #   prompt> R/anima.R [concurso_inicial [concurso_final]]
-#
-# tal que; se ambos os parâmetros forem fornecidos – a ordem de declaração não
-# importa – então os que forem iguais a "0" assumirão valor "1" e se o concurso
-# final for maior que o número do concurso mais recente, então o assume, senão,
-# em caso de único parâmetro fornecido e positivo, então este parâmetro será o
-# número do concurso inicial e o concurso_final assumirá o valor default – o
-# número do concurso mais recente – e se este único parâmetro for negativo,
-# então o valor absoluto do parâmetro é o número de concursos mais recentes que
-# comporão a sequência e finalmente, se nenhum parâmetro fornecido então os 156
-# – máximo número de concursos num ano = 52 semanas × 3 concursos por semana –
-# concursos mais recentes comporão a sequência.
-#
-# Importante: O procedimento é oneroso, principalmente em tempo de execução!
 #
 library(RSQLite)  # r-cran-sqlite <-- Database Interface R driver for SQLite
 
@@ -29,7 +16,7 @@ CONCURSO_MAIS_RECENTE <- as.integer(dbGetQuery(con,
 
 arguments <- commandArgs(TRUE)
 if (length(arguments) == 0) {
-  CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE-156+1
+  CONCURSO_INICIAL <- CONCURSO_MAIS_RECENTE-100+1
 } else {
   arguments <- sort(as.numeric(arguments))
   if (length(arguments) == 1) {
@@ -45,18 +32,38 @@ if (length(arguments) == 0) {
 }
 rm(arguments)
 
-# requisita número da bola, suas frequências, latências mais recentes e
-# valor 0-1 indicador de suas atipicidades até o concurso $CONCURSO
-query <- "SELECT bola, frequencia, latencia, (frequencia < u AND latencia >= v)
-  AS atipico
-FROM (
-  SELECT bola, count(bola) AS frequencia, ($CONCURSO-max(concurso)) AS latencia,
-  ($CONCURSO*15.0/25) AS u, (25.0/15) AS v
-  FROM bolas_sorteadas WHERE concurso <= $CONCURSO
-  GROUP BY bola
-)"
+cat("\n   início: ", CONCURSO_INICIAL, "\n +recente: ", CONCURSO_MAIS_RECENTE, "\n\n> Preparando data frames ", sep="")
 
 bolas <- 1:25   # sequência de numeração das bolas
+
+# prepara a lista do número do concurso e do data frame das frequências,
+# latências mais recentes, supremos das latências e valor 0-1 indicador das
+# atipicidades dos números das bolas em cada concurso
+lista <- vector('list', CONCURSO_MAIS_RECENTE-CONCURSO_INICIAL+1)
+index=0
+for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
+  cat('.')
+  dat <- dbGetQuery(con, 'SELECT bola, COUNT(bola) AS frequencia, $NUMERO-MAX(concurso) AS latencia FROM bolas_sorteadas WHERE concurso <= $NUMERO GROUP BY bola', param=list('NUMERO'=CONCURSO))
+  # completa o data frame se CONCURSO < 7 – que é o número serial do concurso no
+  # qual historicamente todas as bolas foram sorteadas pela primeira vez –
+  if (CONCURSO < 7) {
+    for (bola in which( ! bolas %in% dat$bola )) {
+      dat <- rbind(dat, c(bola, 0, CONCURSO))
+    }
+    dat <- dat[order(dat$bola),]
+  }
+  if (index > 0) {
+    dat$supremo <- pmax(lista[[index]]$numeros$supremo, dat$latencia)
+  } else {
+    dat$supremo <- dat$latencia
+  }
+  dat$atipico <- (dat$frequencia < CONCURSO*15/25) & (dat$latencia >= 25/15)
+  index <- index+1
+  lista[[index]] <- list(concurso=CONCURSO, numeros=dat)
+}
+rm(dat)
+
+cat(" finalizado.\n\n> Preparando parâmetros dos gráficos.\n\n")
 
 # parâmetros compartilhados pelos diagramas
 
@@ -90,49 +97,31 @@ MATRIX <- matrix(c(1, 2), nrow=2, ncol=1); HEIGHTS=c(72, 28)  # layout "2x1"
 MAR_FREQ <- c(2.5, 5.5, 1, 1)
 MAR_LAT <- c(2.5, 5.5, 0, 1)
 
-# completa o data frame com frequências, latências e atipicidades das bolas
-# não sorteadas se CONCURSO < 7 – que é o número serial do concurso em que
-# todas as bolas finalmente foram sorteadas –
-completa <- function (CONCURSO) {
-  ausentes <- which( ! bolas %in% numeros$bola )
-  # if (length(ausentes) > 0) { # <-- teste denecessário :: fato histórico
-    for (bola in ausentes) numeros <- rbind(numeros, c(bola, 0, CONCURSO, 0))
-    numeros <<- numeros[order(numeros$bola),]
-  # }
-}
-
 # menor valor de frequência no intervalo
-numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO_INICIAL))
-if (CONCURSO_INICIAL < 7) { completa(CONCURSO_INICIAL) }
-minor <- (min(numeros$frequencia)%/%10)*10 # limite inferior do eixo Y
+minor <- (min(lista[[1]]$numeros$frequencia)%/%10)*10
 
 # maior valor de frequência no intervalo
-numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO_MAIS_RECENTE))
-if (CONCURSO_MAIS_RECENTE < 7) { completa(CONCURSO_MAIS_RECENTE) }
-major <- (max(numeros$frequencia)%/%10+1)*10 # limite superior do eixo Y
-
+major <- (max(lista[[index]]$numeros$frequencia)%/%10+1)*10
 yLIM_FREQ <- c(minor, major)
 
-# configura escala das frequências com 10 marcas :: provisório
+# configura escala das frequências com 10 marcas
 increment <- (major-minor)%/%10
 yFreq <- seq.int(from=minor, to=major, by=increment)
 rFreq <- head(yFreq, -1)+increment/2
 
 # maior valor das latências a partir do concurso inicial
-maior <- max(sapply(CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE,
-function (CONCURSO) {
-  dbGetQuery(con, 'SELECT MAX(latencia) FROM (SELECT $NUMERO-MAX(concurso) AS
-  latencia FROM bolas_sorteadas WHERE concurso <= $NUMERO GROUP BY bola)',
-  param=list('NUMERO'=CONCURSO))[1, 1]
-}))
+maior <- max(lista[[index]]$numeros$supremo)
 
-labLat <- yLat <- 0:maior; labLat[yLat%%2 != 0] <- ""
+labLat <- yLat <- 0:maior
+labLat[ yLat%%2 != 0 ] <- ""  # exclui rótulos dos valores ímpares
 
 yLIM_LAT <- c(0, maior+.2)
 
 ACC <- dbGetQuery(con, "SELECT concurso, ganhadores_15_numeros == 0 FROM
   concursos WHERE concurso BETWEEN $INICIAL AND $RECENTE",
   param=list("INICIAL"=CONCURSO_INICIAL, "RECENTE"=CONCURSO_MAIS_RECENTE))
+
+dbDisconnect(con)
 
 ACC_COLORS <- c("gray30", "red")
 
@@ -184,18 +173,19 @@ roteiro <- file("video/roteiro.txt", "w", encoding="UTF-8")
 # inicia o arquivo dos números seriais de concursos com premiação acumulada
 acc <- file("video/acc.dat", "w", encoding="UTF-8")
 
-cat("\nCriando quadros da animação")
+cat("\n> Criando quadros da animação ")
+
+index=0   # índice correspondente na lista
 
 for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   cat(".")
 
-  numeros <- dbGetQuery(con, query, param=list('CONCURSO'=CONCURSO))
-  if (CONCURSO < 7) { completa(CONCURSO) }
+  index <- index+1
 
   # cores para preenchimento "zebrado" das colunas, exceto as filtradas
   BAR_COLORS <- STD_BAR_COLORS
-  BAR_COLORS[ numeros$atipico == 1 ] <- "darkorange2"
+  BAR_COLORS[ lista[[index]]$numeros$atipico == T ] <- "darkorange2"
 
   png.filename <- sprintf('quadros/both-%04d.png', CONCURSO)
 
@@ -220,7 +210,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
   )
 
   bar <- barplot(
-    numeros$frequencia,
+    lista[[index]]$numeros$frequencia,
     names.arg=BAR_LABELS, cex.names=BAR_LABELS_CEX,
     font.axis=BAR_LABELS_FONT, col.axis=BAR_LABELS_COL,
     border=BAR_BORDER, col=BAR_COLORS, space=SPACE,
@@ -246,7 +236,8 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   # renderiza o "box & whiskers" entre o eixo Y e primeira coluna
   bp <- boxplot(
-    numeros$frequencia, frame.plot=F, axes=F, add=T, at=BOX_AT,
+    lista[[index]]$numeros$frequencia,
+    frame.plot=F, axes=F, add=T, at=BOX_AT,
     border=HOT, col=BOX_COL, yaxt='n', width=1, boxwex=1/3
   )
 
@@ -268,7 +259,7 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
   par(mar=MAR_LAT)
 
   bar <- barplot(
-    numeros$latencia,
+    lista[[index]]$numeros$latencia,
     names.arg=BAR_LABELS, cex.names=BAR_LABELS_CEX,
     font.axis=BAR_LABELS_FONT, col.axis=BAR_LABELS_COL,
     border=BAR_BORDER, col=BAR_COLORS, space=SPACE,
@@ -279,6 +270,12 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
 
   axis(side=2, at=yLat, col=RULE_COL, labels=labLat)
 
+  # renderiza supremos das latências
+  k <- (bar[2]-bar[1])/2-SPACE
+  y <- lista[[index]]$numeros$supremo
+  segments(bar-k, y, bar+k, y, col=c("dodgerblue", "green3"),
+    lty="solid", lwd=4, ljoin='mitre')
+
   # renderiza texto e linha do valor esperado das latências
   espera=5/3
   abline(h=espera, col=REF, lty="dotted")
@@ -287,7 +284,8 @@ for (CONCURSO in CONCURSO_INICIAL:CONCURSO_MAIS_RECENTE) {
   abline(h=yLat, col=PALE, lty="dotted")
 
   bp <- boxplot(
-    numeros$latencia, frame.plot=F, axes=F, add=T, at=BOX_AT,
+    lista[[index]]$numeros$latencia,
+    frame.plot=F, axes=F, add=T, at=BOX_AT,
     border=HOT, col=BOX_COL, yaxt='n', width=1, boxwex=1/3
   )
 
@@ -306,6 +304,4 @@ close(roteiro)
 
 close(acc)
 
-cat("finalizado.\n\n")
-
-dbDisconnect(con)
+cat(" finalizado.\n\n")

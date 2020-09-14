@@ -16,7 +16,7 @@ con <- dbConnect(SQLite(), "loto.sqlite")
 loto <- dbGetQuery(con, "SELECT m AS concurso, cast(n AS real)/m AS premiacao FROM (SELECT max(concurso) AS m, sum(ganhadores_15_numeros>0) AS n FROM concursos)")
 
 # requisita os 12 concursos mais recentes e respectivos status de premiação
-concursos <- dbGetQuery(con, paste("select concurso, ganhadores_15_numeros>0 as premiado from concursos where concurso >= ", loto$concurso-12+1))
+concursos <- dbGetQuery(con, paste("SELECT concurso, ganhadores_15_numeros>0 AS premiado FROM concursos WHERE concurso >= ", loto$concurso-12+1))
 
 # requisita frequências, latências e atipicidades dos números no concurso mais recente
 numeros <- dbGetQuery(con, "SELECT frequencia, latencia, atipico FROM info_bolas ORDER BY bola")
@@ -100,7 +100,7 @@ plot(NULL, type="n", axes=F, xlim=c(0, 5), ylim=c(0, 1), xlab="")
 
 text(.02, .5, paste("Lotofácil", loto$concurso), adj=AL, col="gray15", family="Roboto Condensed", cex=3.125)
 
-text(2.625, .70625, "premiações recentes:", adj=AL, col="gray20")
+text(2.625, .70625, "premiações \u276A15 bolas\u276B recentes:", adj=AL, col="gray20")
 cores <- colorRampPalette(c("lightblue", "royalblue"))(11); cores[12] <- "blue"
 selecao <- which(!concursos$premiado)
 cores[selecao] <- gray.colors(12, .87, .5)[selecao]
@@ -114,14 +114,14 @@ par(mar=c(0.75, .75, 0, .75))
 plot(NULL, type="n", axes=F, xlim=c(0, 5), ylim=c(0, 1), xlab="")
 
 dat <- matrix(c("\uF00C", "\uF00D", "dodgerblue", "red"), ncol=2, byrow=T)
-text(1.84, VC, c("números i.i.d. U\u276A1, 25\u276B", paste0("premiações ~ Geom\u276A", signif(loto$premiacao, 3), "\u276B")), adj=AR, col="gray20")
-text(1.9, VC, c(dat[1, x], dat[1, y]), adj=AL, col=c(dat[2, x], dat[2, y]))
+text(1.85, VC, c("números i.i.d. U\u276A1, 25\u276B", paste0("premiações ~ Geom\u276A", signif(loto$premiacao, 4), "\u276B")), adj=AR, col="gray20")
+text(1.88, VC, c(dat[1, x], dat[1, y]), adj=AL, col=c(dat[2, x], dat[2, y]))
 rm(dat)
 
 # legenda das quadrículas
 
-rect(2.18, 0, 4.54, 1, xpd=T, col="khaki1", border=NA) # background
-text(2.28, VC, c("frequência", "latência"), adj=AL, col=c("darkred", "violetred"))
+rect(2.40, 0, 4.54, 1, xpd=T, col="khaki1", border=NA) # background
+text(2.50, VC, c("frequência", "latência"), adj=AL, col=c("darkred", "violetred"))
 text(4.44, VC, c("Atípico\u2215Reincidente", "latência recorde"), adj=AR, col=c("black", "firebrick"))
 
 # escala de cores das quadrículas
