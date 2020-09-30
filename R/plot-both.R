@@ -13,9 +13,9 @@ con <- dbConnect(SQLite(), dbname='loto.sqlite')
 # 0-1 indicador da atipicidade de cada número
 query='SELECT concurso, frequencia, latencia, atipico FROM info_bolas'
 numeros <- dbGetQuery(con, query)
-dbDisconnect(con)
-
 CONCURSO <- numeros[1, c('concurso')]
+acumulado <- dbGetQuery(con, "select ganhadores_15_numeros==0 from concursos where concurso is ?", list(CONCURSO))
+dbDisconnect(con)
 
 # parâmetros compartilhados pelos diagramas
 
@@ -111,7 +111,8 @@ rect(
 # renderiza o número do concurso mais recente na margem direita
 text(
   X2, minor, paste("Lotofácil", CONCURSO),
-  srt=90, adj=c(0, 0), cex=2.5, font=2, col=par("col.lab")
+  srt=90, adj=c(0, 0), cex=2.5, font=2, 
+  col=ifelse(acumulado, 'red', par("col.lab"))
 )
 
 # -- DIAGRAMA DAS LATÊNCIAS
