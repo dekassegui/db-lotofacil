@@ -123,7 +123,7 @@ ACC <- dbGetQuery(con, "SELECT concurso, ganhadores_15_numeros == 0 FROM
 
 dbDisconnect(con)
 
-ACC_COLORS <- c("gray30", "red")
+ACC_COLORS <- c("royalblue", "red")
 
 # exclui conteúdo produzido anteriormente
 system('rm -f video/quadros/*.png video/roteiro.txt')

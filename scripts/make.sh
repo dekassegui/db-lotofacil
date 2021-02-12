@@ -66,7 +66,7 @@ declare -r zipfile=${url##*/}
 [[ -e $zipfile ]] && declare -i tm=$(timestamp $zipfile)
 
 # tenta baixar zipfile remoto possivelmente atualizado
-wget -o wget.log --no-cache --timestamping $url
+wget -t 40 -o wget.log --no-cache --timestamping $url
 
 # termina a execução do script se o zipfile não está disponível
 if [[ ! -e $zipfile ]]; then
