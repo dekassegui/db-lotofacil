@@ -18,11 +18,17 @@ long_date() {
 # Computa a data presumida do concurso da Lotofácil anterior e mais recente que
 # a data ISO-8601 fornecida ou a data corrente do sistema em caso contrário.
 loto_date() {
-  (( $# )) && dia=$* || dia=$(date +'%F %H:%M:%S')
+  # prepara a data alvo com data arbitrária ou data corrente
+  (( $# )) && dia=$(date -d "$*" +'%F %H:%M:%S %z') || dia=$(date +'%F %H:%M:%S %z')
   read u F ndays <<< $(date -d "$dia" +'%u %F 0')
-  # testa se dia da semana da data referência é domingo ou se horário da data
-  # referência é anterior a 20:00 <-- horário usual dos sorteios
-  (( $u == 7 || $(date -d "$dia" +%s) < $(date -d "$F 20:00" +%s) )) && ndays=1
+  # testa se data alvo é segunda e se horário da data alvo é anterior a 20:00
+  # que é o horário usual dos sorteios
+  if (( $u == 1 && $(date -d "$dia" +%s) < $(date -d "$F 20:00" +%s) )); then
+    ndays=2
+  # testa se data alvo é domingo ou se horário da data alvo é anterior a 20:00
+  elif (( $u == 7 || $(date -d "$dia" +%s) < $(date -d "$F 20:00" +%s) )); then
+    ndays=1
+  fi
   date -d "$F -$ndays days" +%F
 }
 
