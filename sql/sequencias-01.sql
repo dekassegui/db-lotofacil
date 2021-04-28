@@ -26,7 +26,7 @@ INSERT INTO sequencias
       WHERE m-1 > p
     ) SELECT id, instr(substr(s, p), '0')-1 AS len FROM bag, ones
   ), list (len, soma) AS ( -- identificação do número serial dos concursos
-    SELECT len, sum(len) over ( ORDER BY id ) FROM box
+    SELECT len, sum(len) OVER ( ORDER BY id ) FROM box
   ) SELECT len, (soma-1)/15+1 AS concurso FROM list;
     /* -- para versões do SQLite sem implementação de window functions
       list (len, soma, n) AS ( -- identificação do número serial do concurso
