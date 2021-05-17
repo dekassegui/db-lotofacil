@@ -5,7 +5,7 @@ PRAGMA legacy_file_format = ON;
 DROP TABLE IF EXISTS concursos;
 CREATE TABLE concursos (
   -- tabela obtida por conversão de documento HTML que contém
-  -- a série temporal completa dos concursos da loto fácil
+  -- a série temporal completa dos concursos da Lotofácil
   concurso                  INTEGER PRIMARY KEY,
   data_sorteio              DATETIME NOT NULL ON CONFLICT ABORT, -- yyyy-mm-dd
   bola1                     INTEGER CHECK (bola1 BETWEEN 1 AND 25),
@@ -25,8 +25,6 @@ CREATE TABLE concursos (
   bola15                    INTEGER CHECK (bola15 BETWEEN 1 AND 25),
   arrecadacao_total         DOUBLE,
   ganhadores_15_numeros     INTEGER,
-  cidade                    TEXT DEFAULT NULL,
-  uf                        TEXT DEFAULT NULL,
   ganhadores_14_numeros     INTEGER,
   ganhadores_13_numeros     INTEGER,
   ganhadores_12_numeros     INTEGER,
@@ -82,18 +80,6 @@ CREATE TRIGGER IF NOT EXISTS on_concursos_delete AFTER DELETE ON concursos BEGIN
   DELETE FROM bolas_juntadas WHERE (concurso == old.concurso);
   DELETE FROM bolas_sorteadas WHERE (concurso == old.concurso);
   DELETE FROM ganhadores WHERE (concurso == old.concurso);
-END;
-
-CREATE TRIGGER IF NOT EXISTS on_concursos_chk_cidade AFTER INSERT ON concursos
-WHEN new.cidade == "NULL" OR trim(new.cidade) == ""
-BEGIN
-  UPDATE concursos SET cidade=NULL WHERE concurso == new.concurso;
-END;
-
-CREATE TRIGGER IF NOT EXISTS on_concursos_chk_uf AFTER INSERT ON concursos
-WHEN new.uf == "NULL" OR trim(new.uf) == ""
-BEGIN
-  UPDATE concursos SET uf=NULL WHERE concurso == new.concurso;
 END;
 
 DROP TABLE IF EXISTS bolas_juntadas;

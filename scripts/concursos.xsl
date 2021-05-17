@@ -12,8 +12,21 @@
 
   <!-- monta a lista de registros que serão importados pelo SQLite -->
   <xsl:template name="LIST_BUILDER" match="/">
-    <xsl:for-each select="//table/tr[count(td)=33][position() &gt;= $OFFSET]">
-      <xsl:value-of select="td[1]"/><xsl:value-of select="$SEPARATOR"/><xsl:value-of select="substring(td[2],7)"/>-<xsl:value-of select="substring(td[2],4,2)"/>-<xsl:value-of select="substring(td[2],1,2)"/><xsl:value-of select="$SEPARATOR"/><xsl:for-each select="td[position() &gt; 2 and position() &lt; 20]"><xsl:value-of select="."/><xsl:value-of select="$SEPARATOR"/></xsl:for-each><xsl:choose><xsl:when test="string-length(td[20]) &gt; 0"><xsl:value-of select="td[20]"/></xsl:when><xsl:otherwise>NULL</xsl:otherwise></xsl:choose><xsl:value-of select="$SEPARATOR"/><xsl:choose><xsl:when test="string-length(td[21]) &gt; 0"><xsl:value-of select="td[21]"/></xsl:when><xsl:otherwise>NULL</xsl:otherwise></xsl:choose><xsl:value-of select="$SEPARATOR"/><xsl:for-each select="td[position() &gt; 21 and position() &lt; 33]"><xsl:value-of select="."/><xsl:value-of select="$SEPARATOR"/></xsl:for-each><xsl:value-of select="td[33]"/><xsl:text>&#xA;</xsl:text>
+    <xsl:for-each select="//table/tr[count(td)=32][position() &gt;= $OFFSET]">
+      <xsl:value-of select="td[1]"/><xsl:value-of select="$SEPARATOR"/>
+      <xsl:value-of select="substring(td[2],7)"/><xsl:text>-</xsl:text>
+      <xsl:value-of select="substring(td[2],4,2)"/><xsl:text>-</xsl:text>
+      <xsl:value-of select="substring(td[2],1,2)"/>
+      <xsl:value-of select="$SEPARATOR"/>
+      <xsl:for-each select="td[position() &gt; 2 and position() &lt; 20]">
+        <xsl:value-of select="."/><xsl:value-of select="$SEPARATOR"/>
+      </xsl:for-each>
+      <!-- skip 20th column -->
+      <xsl:for-each select="td[position() &gt; 20 and position() &lt; 32]">
+        <xsl:value-of select="."/><xsl:value-of select="$SEPARATOR"/>
+      </xsl:for-each>
+      <xsl:value-of select="td[32]"/>
+      <xsl:text>&#xA;</xsl:text>
     </xsl:for-each>
   </xsl:template>
 
