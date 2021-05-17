@@ -3,27 +3,30 @@
 Criação/manutenção do DB da Lotofácil, com dados baixados do website da
 Caixa Econômica Federal - Loterias.
 
-Este é um projeto -- concebido em plena pandemia -- irmão do <a
+Este é um projeto – <em>concebido em plena pandemia</em> – irmão do <a
 href="https://github.com/dekassegui/db-megasena">db-megasena</a> que
 contempla a mudança da oferta de dados públicos da série temporal dos
 concursos em 07-05-2021.
 
-** Uso corriqueiro
-
-1. Geração dos diagramas das estatísticas do concurso mais recente:
-
-<code>prompt/ <strong>R/dia.R && R/plot-both.R</strong></code>
-
-2. Geração de animação de série _arbitrária_ de diagramas de frequências e
-latências dos números sorteados nos concursos:
-
-<code>prompt/ <strong>R/anima.R 2122 && scripts/anima.sh</strong></code>
-
-   onde 2122 foi arbitrariamente escolhido e usa-se amplamente o software
-   **ffmpeg** para a dita geração.
-
 Isto não é um sistema de apostas e não advogamos pela Caixa, mas louvamos a
 qualidade dos concursos do ponto de vista matemático/estatístico.
 
-Faça bom uso e boa sorte.
+## Dependências
 
+Instale as libs e aplicativos (<i>disponíveis nos repositórios Linux</i>):
+
+<code>prompt/ sudo apt-get install <strong>sqlite3 sqlite3-pcre xsltproc tidy wget r-base r-cran-rsqlite r-cran-vcd r-cran-rcmdrmisc ffmpeg ffplay</strong></code>
+
+## Uso corriqueiro
+
+1. Atualização do db:
+
+<code>prompt/ <strong>./atualiza-db.sh</strong></code>
+
+2. Geração dos diagramas de estatísticas do concurso mais recente:
+
+<code>prompt/ <strong>R/dia.R && R/plot-both.R</strong></code>
+
+3. Geração de animação da evolução dinâmica de estatísticas dos concursos:
+
+<code>prompt/ <strong>R/anima.R [<em>número de concurso</em>] && scripts/anima.sh</strong></code>
