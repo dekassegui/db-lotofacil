@@ -11,8 +11,8 @@
 
   <xsl:template name="LISTA_DADOS_GANHADORES_LOTO" match="/">
 
-    <xsl:for-each select="//table/tr[@bgcolor and td[19]>0]/td[20]/table/tr">
-      <xsl:value-of select="ancestor::tr[@bgcolor]/td[1]"/>
+    <xsl:for-each select="//table/tr[count(td)=32 and td[19]>0]/td[20]/table/tr">
+      <xsl:value-of select="ancestor::tr[count(td)=32]/td[1]"/>
       <xsl:value-of select="$SEPARATOR"/>
       <xsl:choose>
         <xsl:when test="string-length(td[1])>0">
