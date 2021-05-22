@@ -20,6 +20,8 @@ Todas as libs e aplicativos usados neste projeto, estão disponíveis nos reposi
 
 2. Geração dos diagramas estatísticos do concurso mais recente:
 
+![diagramas](https://github.com/dekassegui/db-lotofacil/blob/master/img/diagramas-2235.png "diagrama")
+
 > <code>prompt/ <strong>R/dia.R && R/plot-both.R</strong></code>
 
 3. Geração de animação de sequências de diagramas estatísticos dos concursos:
