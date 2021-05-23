@@ -88,7 +88,7 @@ if (( $n > $m )); then
     xsltproc -o ganhadores.dat --html --stringparam SEPARATOR "|" --param OFFSET $((m+1)) scripts/ganhadores.xsl concursos.html
   else
     # cria arquivo vazio com time stamp do arquivo baixado
-    printf '' > ganhadores.dat
+    > ganhadores.dat
     touch -r $html ganhadores.dat
   fi
 

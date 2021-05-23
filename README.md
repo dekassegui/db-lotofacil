@@ -4,7 +4,7 @@ Scripts para criação, atualização e consultas a DB dos concursos da **Lotof�
 
 Este é um projeto – <em>concebido em plena pandemia</em> – irmão do <a href="https://github.com/dekassegui/db-megasena">db-megasena</a> que também contempla a mudança da oferta de dados públicos da série temporal dos concursos em *07 de maio de 2021*.
 
-> Reinstale o corrente *upgrade* e delete o arquivo do DB – **loto.sqlite** – que será reconstruído com novo esquema e preenchido na primeira execução do novo script de atualização – **atualiza-db.sh**.
+> **Reinstale o corrente upgrade e delete o arquivo do DB – <em>loto.sqlite</em> – que será recriado com novo esquema e preenchido na primeira execução do novo script de atualização – <em>atualiza-db.sh</em>.**
 
 Isto não é um sistema de apostas e não advogamos pela Caixa, mas louvamos a qualidade dos concursos do ponto de vista matemático/estatístico.
 
