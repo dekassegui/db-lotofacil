@@ -2,7 +2,9 @@
 
 Scripts para criação, atualização e consultas a DB dos concursos da **Lotofácil** com utilização do <a href="http://www.sqlite.org" title="clique para acessar o website do SQLite">SQLite</a> mais extensões carregáveis, viabilizando analises estatísticas via <a href="http://www.r-project.org/" title="clique para acessar o website do R Statistical Computing...">R Statistical Computing Environment</a> ou similar.
 
-Este é um projeto – <em>concebido em plena pandemia</em> – irmão do <a href="https://github.com/dekassegui/db-megasena">db-megasena</a> que contempla também a mudança da oferta de dados públicos da série temporal dos concursos em 07 de maio de 2021.
+Este é um projeto – <em>concebido em plena pandemia</em> – irmão do <a href="https://github.com/dekassegui/db-megasena">db-megasena</a> que também contempla a mudança da oferta de dados públicos da série temporal dos concursos em *07 de maio de 2021*.
+
+> Reinstale o corrente *upgrade* e delete o arquivo do DB – **loto.sqlite** – que será reconstruído com novo esquema e preenchido na primeira execução do novo script de atualização – **atualiza-db.sh**.
 
 Isto não é um sistema de apostas e não advogamos pela Caixa, mas louvamos a qualidade dos concursos do ponto de vista matemático/estatístico.
 
@@ -19,6 +21,7 @@ Todas as libs e aplicativos usados estão disponíveis nos repositórios Linux:
   > <code>prompt/ <strong>./atualiza-db.sh</strong></code>
 
   2. Geração dos diagramas estatísticos do concurso mais recente:
+
   ![diagramas](https://github.com/dekassegui/db-lotofacil/blob/master/img/diagramas-2235.png "diagramas")
 
   > <code>prompt/ <strong>R/dia.R && R/plot-both.R</strong></code>
