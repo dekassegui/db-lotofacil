@@ -94,8 +94,8 @@ if (( $n > $m )); then
 
   printf '\n-- Preenchendo o db.\n'
 
-  # reconstrói o db preenchendo as tabelas dos concursos e dos acertadores com
-  # os respectivos dados recém extraídos
+  # preenche as tabelas dos concursos e dos acertadores com os respectivos dados
+  # recém extraídos
   sqlite3 loto.sqlite <<EOT
 .import concursos.dat concursos
 .import ganhadores.dat ganhadores

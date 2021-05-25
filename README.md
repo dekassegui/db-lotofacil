@@ -29,3 +29,7 @@ Todas as libs e aplicativos usados estão disponíveis nos repositórios Linux:
   3. Geração de animação de sequências de diagramas estatísticos dos concursos:
 
   > <code>prompt/ <strong>R/anima.R [<em>número de concurso</em>] && scripts/anima.sh</strong></code>
+
+## Addendum
+
+  <a href="https://youtu.be/hzVVce7XKjo" title="clique para assistir a animação">Animação de estatísticas do concurso 2122 até 2238.</a>
