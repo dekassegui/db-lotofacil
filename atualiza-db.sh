@@ -84,11 +84,30 @@ xpath() {
   xmllint --html --xpath "$1" $clean
 }
 
-# contabiliza a quantidade de registros de concursos no html
-n=$(xpath "count(//table/tr[count(td)>2])")
+# extrai o número do concurso mais recente registrado no html
+n=$(xpath '//body/table/tr[last()]/td[1]/text()')
 
-# contabiliza a quantidade de registros de concursos no db
-m=$(sqlite3 $dbname "select count(1) from concursos")
+# contabiliza a quantidade de concursos registrados no html
+m=$(xpath 'count(//body/table/tr[td[32]])')
+
+# checa a sequência de concursos registrados no html
+if (( n > m )); then
+  # monta a string que representa a lista dos números de concursos no html
+  # usando único espaço em branco como prefixo e sufixo de cada número
+  z=$(xpath '//body/table/tr[td[32]]/td[1]' | sed -ru 's/[^0-9]+/ /g')
+  # prepara o array dos números de concursos omitidos
+  declare -a missing
+  # loop de pesquisa que preenche o array dos números dos concursos omitidos
+  for (( i=0, j=n-m, k=1; j>0 && k<n; k++ )); do
+    [[ $z =~ " $k " ]] && continue
+    missing[$i]=$k    # inclusão do número do concurso omitido ao array
+    (( --j, ++i ))    # atualização dos contadores
+  done
+  printf '\nAviso: Faltam %d registros no html:\n\n %s.\n' $i "${missing[*]}"
+fi
+
+# requisita o número do concurso mais recente registrado no db
+m=$(sqlite3 $dbname "select concurso from concursos order by data_sorteio desc limit 1")
 
 if (( $n > $m )); then
 
@@ -104,7 +123,7 @@ if (( $n > $m )); then
 
   # contabiliza o número de acertadores a partir do concurso mais antigo não
   # registrado, dado que o db pode estar desatualizado a mais de um concurso
-  n=$(xpath "sum(//table/tr[count(td)>2][td[1]>$m]/td[19]/text())")
+  n=$(xpath "sum(//tr[td[1]>$m]/td[19])")
 
   if (( $n > 0 )); then
     printf '\n-- Extraindo dados dos acertadores.\n'
