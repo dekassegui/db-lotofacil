@@ -14,6 +14,13 @@ Todas as libs e aplicativos usados estão disponíveis nos repositórios Linux:
 
 > <code>prompt/ sudo apt-get install <strong>sqlite3 sqlite3-pcre xsltproc tidy wget libxml2-utils r-base r-cran-rsqlite r-cran-vcd r-cran-rcmdrmisc ffmpeg ffprobe ffplay</strong></code>
 
+A partir da atualização de 20/01/2022:
+
+> <code>prompt/ sudo apt-get install <strong>sqlite3 sqlite3-pcre wget r-base r-cran-rsqlite r-cran-vcd r-cran-rcmdrmisc ffmpeg ffprobe ffplay</strong></code>
+
+><code>Instale **xidel** disponível em: <a href="https://www.videlibri.de/xidel.html">Website do XIDEL</a></code>
+
+
 ## Uso Corriqueiro
 
   1. Atualização do db com dados baixados do website da <a href="http://loterias.caixa.gov.br/wps/portal/loterias/landing/lotofacil" title="link de download disponível após resultado do concurso mais recente">Caixa Econômica Federal > Loterias > Lotofácil</a>:
