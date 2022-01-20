@@ -38,11 +38,9 @@ loto_date() {
 
 echo -e '\nData presumida do sorteio mais recente: '$(long_date $(loto_date))'.'
 
-declare -r dirty=resultados.html      # arquivo da série temporal de concursos
-                                      # baixada a cada execução e preservada até
+declare -r html=resultados.html       # arquivo da série temporal de concursos
+                                      # baixado a cada execução e preservado até
                                       # a seguinte como backup
-declare -r clean=concursos.html       # versão de $dirty válida no padrão HTML5
-                                      # da W3C
 declare -r dbname=loto.sqlite         # arquivo do db SQLite, opcionalmente
                                       # (re)criado, preenchido a cada execução
 declare -r concursos=concursos.dat    # arquivo plain/text dos dados de
@@ -51,26 +49,20 @@ declare -r ganhadores=ganhadores.dat  # arquivo plain/text dos dados de
                                       # acertadores para preenchimento do db
 
 # preserva, se existir, o arquivo da série de concursos baixado anteriormente
-[[ -e $dirty ]] && mv $dirty $dirty~
+[[ -e $html ]] && mv $html $html~
 
 printf '\n-- Baixando arquivo remoto.\n'
 
-# download da série temporal dos concursos que é armazenada em $dirty
+# download do arquivo html da série temporal dos concursos
 # Nota: Não é possível usar time_stamping e cache.
-wget --default-page=$dirty -o wget.log --remote-encoding=utf8 http://loterias.caixa.gov.br/wps/portal/loterias/landing/lotofacil/\!ut/p/a1/04_Sj9CPykssy0xPLMnMz0vMAfGjzOLNDH0MPAzcDbz8vTxNDRy9_Y2NQ13CDA0sTIEKIoEKnN0dPUzMfQwMDEwsjAw8XZw8XMwtfQ0MPM2I02-AAzgaENIfrh-FqsQ9wBmoxN_FydLAGAgNTKEK8DkRrACPGwpyQyMMMj0VAcySpRM\!/dl5/d5/L2dBISEvZ0FBIS9nQSEh/pw/Z7_HGK818G0K85260Q5OIRSC42046/res/id=historicoHTML/c=cacheLevelPage/=/
+wget --default-page=$html -o wget.log --remote-encoding=utf8 http://loterias.caixa.gov.br/wps/portal/loterias/landing/lotofacil/\!ut/p/a1/04_Sj9CPykssy0xPLMnMz0vMAfGjzOLNDH0MPAzcDbz8vTxNDRy9_Y2NQ13CDA0sTIEKIoEKnN0dPUzMfQwMDEwsjAw8XZw8XMwtfQ0MPM2I02-AAzgaENIfrh-FqsQ9wBmoxN_FydLAGAgNTKEK8DkRrACPGwpyQyMMMj0VAcySpRM\!/dl5/d5/L2dBISEvZ0FBIS9nQSEh/pw/Z7_HGK818G0K85260Q5OIRSC42046/res/id=historicoHTML/c=cacheLevelPage/=/
 
 # restaura o arquivo e aborta execução do script se o download foi mal sucedido
-if [[ ! -e $dirty ]]; then
+if [[ ! -e $html ]]; then
   printf '\nAviso: Não foi possível baixar o arquivo remoto.\n\n'
-  [[ -e $dirty~ ]] && mv $dirty~ $dirty
+  [[ -e $html~ ]] && mv $html~ $html
   exit 1
 fi
-
-printf '\n-- Ajustando o doc html.\n'
-
-# ajusta o html armazenado em $dirty que torna-se válido no padrão HTML5 da W3C
-# possibilitando consultas via XPath e extração de dados via XSLT
-tidy -config tidy.cfg $dirty | sed -ru -f scripts/clean.sed > $clean
 
 if [[ ! -e $dbname ]]; then
   printf '\n-- Criando o db.\n'
@@ -81,55 +73,50 @@ EOT
 fi
 
 xpath() {
-  xmllint --html --xpath "$1" $clean
+  xidel $html -s --xpath "$1"
 }
 
 # extrai o número do concurso mais recente registrado no html
-n=$(xpath '//body/table/tr[last()]/td[1]/text()')
+n=$(xpath 'html/body/table/tbody/tr[last()]/td[1]')
 
 # contabiliza a quantidade de concursos registrados no html
-m=$(xpath 'count(//body/table/tr[td[32]])')
+m=$(xpath 'count(html/body/table/tbody/tr[td[32]])')
 
-# checa a sequência de concursos registrados no html
+# checa a sequência dos números dos concursos no html
 if (( n > m )); then
-  # monta a string que representa a lista dos números de concursos no html
-  # usando único espaço em branco como prefixo e sufixo de cada número
-  z=$(xpath '//body/table/tr[td[32]]/td[1]' | sed -ru 's/[^0-9]+/ /g')
-  # prepara o array dos números de concursos omitidos
-  declare -a missing
-  # loop de pesquisa que preenche o array dos números dos concursos omitidos
-  for (( i=0, j=n-m, k=1; j>0 && k<n; k++ )); do
-    [[ $z =~ " $k " ]] && continue
-    missing[$i]=$k    # inclusão do número do concurso omitido ao array
-    (( --j, ++i ))    # atualização dos contadores
+  # monta a representação textual da lista dos números dos concursos no html
+  z=$(xpath 'html/body/table/tbody/tr[td[32]]/td[1]')
+  j=$(( n-m ))
+  printf '\nAviso: Faltam %d registros no html:\n\n' $j
+  # loop de pesquisa dos números omitidos
+  for (( k=1; j>0 && k<n; k++ )); do
+    [[ $z =~ $k ]] && continue
+    printf ' %04d' $k   # output do número do concurso omitido
+    (( --j ))           # atualização do contador
   done
-  printf '\nAviso: Faltam %d registros no html:\n\n %s.\n' $i "${missing[*]}"
+  printf '\n'
 fi
 
 # requisita o número do concurso mais recente registrado no db
 m=$(sqlite3 $dbname "select concurso from concursos order by data_sorteio desc limit 1")
 
-if (( $n > $m )); then
+if (( n > m )); then
 
   printf '\n-- Extraindo dados dos concursos.\n'
 
-  xslt() {
-    xsltproc -o "$1" --html --stringparam SEPARATOR "|" --param OFFSET $((m+1)) "$2" $clean
-  }
-
-  # extrai os dados dos concursos – exceto dos acertadores – transformando o doc
-  # html ajustado em arquivo text/plain conveniente para importação no SQLite
-  xslt $concursos scripts/concursos.xsl
+  # extrai do html baixado os dados dos concursos – exceto dos acertadores – que
+  # são armazenados num arquivo text/plain conveniente para importação no SQLite
+  xpath "html/body/table/tbody/tr[td[32] and td[1]>$m] / string-join((td[1], string-join((substring(td[2],7), substring(td[2],4,2), substring(td[2],1,2)), '-'), td[position()>2 and 18>position()], translate(td[18], ',.', '.'), td[19], td[position()>20 and 25>position()], translate(string-join(td[position()>24 and 33>position()], '|'), ',.', '.')), '|')" > $concursos
 
   # contabiliza o número de acertadores a partir do concurso mais antigo não
   # registrado, dado que o db pode estar desatualizado a mais de um concurso
-  n=$(xpath "sum(//tr[td[1]>$m]/td[19])")
+  n=$(xpath "sum(html/body/table/tbody/tr[td[32] and td[1]>$m]/td[19])")
 
-  if (( $n > 0 )); then
+  if (( n > 0 )); then
     printf '\n-- Extraindo dados dos acertadores.\n'
-    # extrai somente dados dos acertadores, transformando o doc html ajustado
-    # em arquivo text/plain conveniente para importação no db SQLite
-    xslt $ganhadores scripts/ganhadores.xsl
+    # extrai do html baixado somente dados dos acertadores, que são armazenados
+    # num arquivo text/plain conveniente para importação no db SQLite
+    xpath "html/body/table/tbody/tr[td[32] and td[1]>$m and td[19]>0]/td[20]/table/tbody/tr / concat(ancestor::tr[td[32]]/td[1], '|', upper-case(concat(if (string-length(td[1])=0) then 'NULL' else td[1], '|', if (string-length(td[2])=0) then 'NULL' else td[2])))" > $ganhadores
   else
     > $ganhadores   # cria arquivo vazio que evita erro ao importar dados
   fi
@@ -145,4 +132,10 @@ EOT
 fi
 
 # notifica o número serial e data do concurso mais recente no db
-sqlite3 $dbname "select x'0a' || printf('Concurso registrado mais recente: %s em %s', concurso, strftime('%d-%m-%Y', data_sorteio)) || x'0a' from concursos order by concurso desc limit 1"
+read n s <<< $(sqlite3 -separator ' ' $dbname 'select concurso, data_sorteio from concursos order by concurso desc limit 1')
+printf '\nConcurso mais recente no DB: %04d em %s.\n\n' $n "$(long_date $s)"
+
+# pesquisa e notifica reincidência da combinação das bolas sorteadas mais
+# recente na série histórica dos concursos
+m=$(sqlite3 $dbname "with cte(N) as (select bolas from bolas_juntadas where concurso == $n) select count(1) from bolas_juntadas, cte where bolas == N")
+(( m > 1 )) && printf 'Nota: A combinação das bolas sorteados %s\n\n' "ocorreu $m vezes!"
